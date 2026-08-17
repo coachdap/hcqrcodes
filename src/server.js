@@ -25,7 +25,9 @@ const UI_HTML = readFileSync(
 export function createApp() {
   const app = express();
   app.disable('x-powered-by');
-  app.use(express.json({ limit: BODY_LIMIT }));
+  // NOT app-wide: parsing a body is expensive, so it must sit behind the flood
+  // check and the token check rather than in front of them.
+  const parseJson = express.json({ limit: BODY_LIMIT });
 
   app.get('/health', (req, res) => {
     res.json({ status: 'ok', service: 'qrgen', uptime: Math.round(process.uptime()) });
@@ -63,8 +65,11 @@ export function createApp() {
   });
 
   const auth = bearerAuth({ token: TOKEN, trustInternal: TRUST_INTERNAL });
-  // Limiter precedes auth so floods are shed before any real work is done.
-  const guard = [rateLimit(), auth];
+
+  // Order matters: shed floods, then reject unauthenticated callers, and only
+  // then parse the body. An unauthenticated 9MB POST is now rejected in
+  // milliseconds instead of being fully parsed first.
+  const guard = [rateLimit({ phase: 'pre' }), auth, parseJson, rateLimit({ phase: 'post' })];
 
   app.post('/generate', guard, async (req, res, next) => {
     try {
@@ -177,6 +182,21 @@ export function createApp() {
           code: 'VALIDATION_FAILED',
           message: 'Request body failed validation.',
           details: err.issues.map((i) => ({ path: i.path.join('.') || '(root)', message: i.message }))
+        }
+      });
+    }
+
+    // body-parser failures surface as opaque SyntaxErrors otherwise.
+    if (err.type === 'entity.parse.failed') {
+      return res.status(400).json({
+        error: { code: 'BAD_JSON', message: 'Request body is not valid JSON.' }
+      });
+    }
+    if (err.type === 'entity.too.large') {
+      return res.status(413).json({
+        error: {
+          code: 'BODY_TOO_LARGE',
+          message: `Request body exceeds the ${BODY_LIMIT} limit. Shrink the logo or split the batch.`
         }
       });
     }

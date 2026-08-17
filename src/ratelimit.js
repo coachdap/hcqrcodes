@@ -58,14 +58,26 @@ function prune(now) {
   }
 }
 
-export function rateLimit() {
+/**
+ * @param {object} [opts]
+ * @param {'pre'|'post'} [opts.phase]
+ *   'pre'  — runs before the body is parsed, so it can only charge a flat unit.
+ *            This is the phase that actually sheds floods, since parsing a large
+ *            body is the expensive part and must not happen first.
+ *   'post' — runs after parsing and charges the remainder for multi-item batches,
+ *            which cost one unit per QR.
+ */
+export function rateLimit({ phase = 'pre' } = {}) {
   return (req, res, next) => {
     const now = Date.now();
     if (buckets.size > MAX_KEYS / 2) prune(now);
 
     const limit = isInternalRequest(req) ? LIMIT_INTERNAL : LIMIT_EXTERNAL;
     const key = clientKey(req);
-    const cost = costOf(req);
+    // The pre phase already charged one unit for this request.
+    const cost = phase === 'pre' ? 1 : Math.max(0, costOf(req) - 1);
+
+    if (cost === 0) return next();
 
     let bucket = buckets.get(key);
     if (!bucket || bucket.reset <= now) {
