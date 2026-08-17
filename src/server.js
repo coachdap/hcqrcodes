@@ -1,10 +1,13 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import archiver from 'archiver';
 import { z } from 'zod';
 import { generate } from './core.js';
 import { buildWifiPayload, buildVcardPayload } from './payloads.js';
 import { wifiRequestSchema, vcardRequestSchema, batchSchema } from './schema.js';
-import { bearerAuth } from './auth.js';
+import { bearerAuth, isInternalRequest } from './auth.js';
 import { rateLimit } from './ratelimit.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
@@ -13,6 +16,11 @@ const TOKEN = process.env.QRGEN_TOKEN ?? '';
 const TRUST_INTERNAL = (process.env.QRGEN_TRUST_INTERNAL ?? 'true') !== 'false';
 const LOGO_DIR = process.env.QRGEN_LOGO_DIR ?? '/output/logos';
 const BODY_LIMIT = process.env.QRGEN_BODY_LIMIT ?? '10mb';
+
+const UI_HTML = readFileSync(
+  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'index.html'),
+  'utf8'
+);
 
 export function createApp() {
   const app = express();
@@ -23,13 +31,23 @@ export function createApp() {
     res.json({ status: 'ok', service: 'qrgen', uptime: Math.round(process.uptime()) });
   });
 
-  // Every generation route is POST, so a browser hitting this host would otherwise
-  // just get a bare 404. Serve a self-describing index instead.
+  const ui = (req, res) => res.type('html').send(UI_HTML);
+  app.get('/ui', ui);
+
+  // Lets the UI show or hide its token field without generating a throwaway QR.
+  app.get('/auth', (req, res) => {
+    const internal = isInternalRequest(req);
+    res.json({ scope: internal ? 'internal' : 'external', tokenRequired: !(TRUST_INTERNAL && internal) });
+  });
+
+  // Browsers get the UI; API clients (curl sends Accept: */*) get the JSON index.
   app.get('/', (req, res) => {
+    if ((req.headers.accept ?? '').includes('text/html')) return ui(req, res);
     res.json({
       service: 'qrgen',
       description: 'QR code generation for Hoops College and Chase Excellence.',
       docs: 'https://github.com/coachdap/hcqrcodes',
+      ui: 'https://qr.hoopscollege.com/ui',
       note: 'All generation endpoints are POST with a JSON body. GET returns 405.',
       auth: 'Bearer token required for external callers; callers on hc-internal are exempt.',
       endpoints: {

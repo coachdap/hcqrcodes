@@ -16,6 +16,7 @@ COPY src ./src
 COPY bin ./bin
 COPY test ./test
 COPY assets ./assets
+COPY public ./public
 COPY client.js ./client.js
 
 # node:22-slim ships an unprivileged `node` user (uid 1000); run as it, not root.
