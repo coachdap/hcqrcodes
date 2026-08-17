@@ -175,6 +175,16 @@ token is *always* verified, so a wrong token fails even from an internal source.
 > reach `127.0.0.1:3020`, can generate without a token. The Docker network is the
 > perimeter. Set `QRGEN_TRUST_INTERNAL=false` to require the token from everyone.
 
+**Rate limiting.** A sliding window guards the generation endpoints (`/health` and `/`
+are exempt). It runs *before* the token check, so unauthenticated floods are shed before
+any real work is done. Cost is weighted — generation is CPU-bound, so a 50-item batch
+costs 50 units, not 1. Callers are keyed on `CF-Connecting-IP` where present (set by
+Cloudflare and unspoofable, unlike `X-Forwarded-For`), falling back to XFF then the
+socket address. Exceeding it returns `429` with `RateLimit-*` and `Retry-After` headers.
+
+This is the origin-side half. Pair it with a Cloudflare rate-limiting rule so floods are
+dropped at the edge before they reach hc-new at all.
+
 **Logo file paths over HTTP** are confined to `QRGEN_LOGO_DIR` (`/output/logos`);
 anything outside is rejected with `LOGO_PATH_DENIED`. Base64 is always accepted. The
 CLI, being operator-driven, reads any local path.
@@ -319,6 +329,10 @@ See `.env.example` for the annotated list. Summary:
 | `QRGEN_HOST_PORT` | `3020` | loopback port published on the host |
 | `QRGEN_TOKEN` | — | bearer token for external callers; unset ⇒ external requests get 503 |
 | `QRGEN_TRUST_INTERNAL` | `true` | allow RFC1918/no-XFF callers to skip the token |
+| `QRGEN_RATE_LIMIT` | `300` | units per window for external callers |
+| `QRGEN_RATE_LIMIT_INTERNAL` | `1200` | units per window for internal callers |
+| `QRGEN_RATE_WINDOW_MS` | `60000` | rate-limit window |
+| `QRGEN_RATE_MAX_KEYS` | `10000` | distinct callers tracked |
 | `QRGEN_LOGO_DIR` | `/output/logos` | directory HTTP callers may reference by path |
 | `QRGEN_BODY_LIMIT` | `10mb` | max JSON body |
 | `OUTPUT_DIR` | `/output` | where the acceptance script writes |

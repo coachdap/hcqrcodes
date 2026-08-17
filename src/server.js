@@ -5,6 +5,7 @@ import { generate } from './core.js';
 import { buildWifiPayload, buildVcardPayload } from './payloads.js';
 import { wifiRequestSchema, vcardRequestSchema, batchSchema } from './schema.js';
 import { bearerAuth } from './auth.js';
+import { rateLimit } from './ratelimit.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -42,8 +43,10 @@ export function createApp() {
   });
 
   const auth = bearerAuth({ token: TOKEN, trustInternal: TRUST_INTERNAL });
+  // Limiter precedes auth so floods are shed before any real work is done.
+  const guard = [rateLimit(), auth];
 
-  app.post('/generate', auth, async (req, res, next) => {
+  app.post('/generate', guard, async (req, res, next) => {
     try {
       send(res, await generate(req.body ?? {}, { allowedLogoDir: LOGO_DIR }));
     } catch (err) {
@@ -51,7 +54,7 @@ export function createApp() {
     }
   });
 
-  app.post('/generate/wifi', auth, async (req, res, next) => {
+  app.post('/generate/wifi', guard, async (req, res, next) => {
     try {
       const { ssid, password, encryption, hidden, ...render } = wifiRequestSchema.parse(req.body ?? {});
       const data = buildWifiPayload({ ssid, password, encryption, hidden });
@@ -61,7 +64,7 @@ export function createApp() {
     }
   });
 
-  app.post('/generate/vcard', auth, async (req, res, next) => {
+  app.post('/generate/vcard', guard, async (req, res, next) => {
     try {
       const { name, org, title, phone, email, url, ...render } = vcardRequestSchema.parse(req.body ?? {});
       const data = buildVcardPayload({ name, org, title, phone, email, url });
@@ -71,7 +74,7 @@ export function createApp() {
     }
   });
 
-  app.post('/generate/batch', auth, async (req, res, next) => {
+  app.post('/generate/batch', guard, async (req, res, next) => {
     try {
       const { items, format } = batchSchema.parse(req.body ?? {});
 
