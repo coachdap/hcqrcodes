@@ -40,9 +40,11 @@ export function createApp() {
     res.json({ scope: internal ? 'internal' : 'external', tokenRequired: !(TRUST_INTERNAL && internal) });
   });
 
-  // Browsers get the UI; API clients (curl sends Accept: */*) get the JSON index.
+  // The UI lives only at /ui so that a Cloudflare Access policy can protect it by
+  // path prefix without also covering the API routes. Browsers are redirected
+  // there; API clients (curl sends Accept: */*) still get the JSON index here.
   app.get('/', (req, res) => {
-    if ((req.headers.accept ?? '').includes('text/html')) return ui(req, res);
+    if ((req.headers.accept ?? '').includes('text/html')) return res.redirect(302, '/ui');
     res.json({
       service: 'qrgen',
       description: 'QR code generation for Hoops College and Chase Excellence.',
