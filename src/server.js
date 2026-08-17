@@ -22,6 +22,25 @@ export function createApp() {
     res.json({ status: 'ok', service: 'qrgen', uptime: Math.round(process.uptime()) });
   });
 
+  // Every generation route is POST, so a browser hitting this host would otherwise
+  // just get a bare 404. Serve a self-describing index instead.
+  app.get('/', (req, res) => {
+    res.json({
+      service: 'qrgen',
+      description: 'QR code generation for Hoops College and Chase Excellence.',
+      docs: 'https://github.com/coachdap/hcqrcodes',
+      note: 'All generation endpoints are POST with a JSON body. GET returns 405.',
+      auth: 'Bearer token required for external callers; callers on hc-internal are exempt.',
+      endpoints: {
+        'GET  /health': 'liveness, no auth',
+        'POST /generate': 'core generator — { data, format, size, margin, ecLevel, dark, light, logo, logoScale }',
+        'POST /generate/wifi': '{ ssid, password, encryption, hidden } + render options',
+        'POST /generate/vcard': '{ name, org, title, phone, email, url } + render options',
+        'POST /generate/batch': '{ items: [...], format } — returns a zip'
+      }
+    });
+  });
+
   const auth = bearerAuth({ token: TOKEN, trustInternal: TRUST_INTERNAL });
 
   app.post('/generate', auth, async (req, res, next) => {
@@ -106,8 +125,24 @@ export function createApp() {
     }
   });
 
+  const POST_ROUTES = ['/generate', '/generate/wifi', '/generate/vcard', '/generate/batch'];
+
   app.use((req, res) => {
-    res.status(404).json({ error: { code: 'NOT_FOUND', message: `No route for ${req.method} ${req.path}` } });
+    // Right path, wrong method — say so, rather than implying the endpoint is missing.
+    if (POST_ROUTES.includes(req.path)) {
+      return res.status(405).set('Allow', 'POST').json({
+        error: {
+          code: 'METHOD_NOT_ALLOWED',
+          message: `${req.path} accepts POST, not ${req.method}. Send a JSON body; see GET / for the endpoint list.`
+        }
+      });
+    }
+    res.status(404).json({
+      error: {
+        code: 'NOT_FOUND',
+        message: `No route for ${req.method} ${req.path}. See GET / for the endpoint list.`
+      }
+    });
   });
 
   app.use((err, req, res, _next) => {
