@@ -19,6 +19,13 @@ services:
       - qrgen-output:/output
     networks:
       - hc-internal
+    # A single 8192px render peaks around 560MB in sharp. Without a ceiling, a few
+    # concurrent large renders would compete with n8n and the live sites on this
+    # host; with one, the kernel kills this container instead and it restarts.
+    mem_limit: ${QRGEN_MEM_LIMIT:-1536m}
+    memswap_limit: ${QRGEN_MEM_LIMIT:-1536m}
+    cpus: ${QRGEN_CPUS:-1.5}
+    pids_limit: 256
     healthcheck:
       test:
         [

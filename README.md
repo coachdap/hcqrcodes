@@ -133,6 +133,40 @@ cleanly instead of producing a half-written archive.
 
 Open, no token. `{"status":"ok","service":"qrgen","uptime":123}`.
 
+### `GET /ui` — browser interface
+
+A single self-contained page for generating a QR from a link by hand: paste a link,
+pick format and colours, optionally attach a logo, then preview and download. It shows
+the QR version, EC level, file size and any warnings, and has a live byte counter that
+tracks the real per-EC-level capacity.
+
+Same-origin with the API, so there is no CORS setup and nothing separate to deploy.
+`GET /` redirects browsers here; API clients sending `Accept: */*` still get the JSON
+index instead. The UI is confined to `/ui` deliberately, so a Cloudflare Access policy
+can protect the page by path prefix without also covering the API routes.
+
+From outside `hc-internal` the page asks for the bearer token once and keeps it in that
+browser's `localStorage`. Loading the page is not gated; generating is.
+
+### `GET /auth`
+
+Reports whether the caller needs a token: `{"scope":"external","tokenRequired":true}`.
+Lets the UI decide whether to show its token field without spending a generate call.
+
+### Error codes
+
+| Code | Status | Meaning |
+| --- | --- | --- |
+| `VALIDATION_FAILED` | 400 | body failed zod validation; `details` lists each field |
+| `BAD_JSON` | 400 | body is not valid JSON |
+| `INVALID_LOGO` / `LOGO_PATH_DENIED` | 400 | logo unreadable, or path outside `QRGEN_LOGO_DIR` |
+| `UNAUTHORIZED` | 401 | missing or invalid bearer token |
+| `METHOD_NOT_ALLOWED` | 405 | right path, wrong method — every generation route is POST |
+| `PAYLOAD_TOO_LARGE` | 413 | data exceeds byte capacity at the effective EC level |
+| `BODY_TOO_LARGE` | 413 | request body exceeds `QRGEN_BODY_LIMIT` |
+| `RATE_LIMITED` | 429 | see `Retry-After` |
+| `AUTH_NOT_CONFIGURED` | 503 | `QRGEN_TOKEN` unset, so external callers cannot be authenticated |
+
 ---
 
 ## Behaviour worth knowing
@@ -174,6 +208,16 @@ token is *always* verified, so a wrong token fails even from an internal source.
 > **Trust boundary:** any container on `hc-internal`, and anything on hc-new that can
 > reach `127.0.0.1:3020`, can generate without a token. The Docker network is the
 > perimeter. Set `QRGEN_TRUST_INTERNAL=false` to require the token from everyone.
+
+**Request ordering.** Body parsing sits *behind* the flood check and the token check,
+not in front of them. Parsing a multi-megabyte body is the expensive part of an abusive
+request, so an unauthenticated caller must never be able to trigger it: at the origin, a
+9MB anonymous POST is rejected in ~0.002s rather than ~5.7s.
+
+**Resource ceiling.** A single 8192px render peaks near 560MB inside sharp. The compose
+file caps the container (`QRGEN_MEM_LIMIT`, `QRGEN_CPUS`, `pids_limit`) so a burst of
+large renders cannot starve n8n or the live sites sharing hc-new — the container is
+OOM-killed and restarted instead of the host suffering.
 
 **Rate limiting.** A sliding window guards the generation endpoints (`/health` and `/`
 are exempt). It runs *before* the token check, so unauthenticated floods are shed before
@@ -333,6 +377,8 @@ See `.env.example` for the annotated list. Summary:
 | `QRGEN_RATE_LIMIT_INTERNAL` | `1200` | units per window for internal callers |
 | `QRGEN_RATE_WINDOW_MS` | `60000` | rate-limit window |
 | `QRGEN_RATE_MAX_KEYS` | `10000` | distinct callers tracked |
+| `QRGEN_MEM_LIMIT` | `1536m` | container memory ceiling |
+| `QRGEN_CPUS` | `1.5` | container CPU ceiling |
 | `QRGEN_LOGO_DIR` | `/output/logos` | directory HTTP callers may reference by path |
 | `QRGEN_BODY_LIMIT` | `10mb` | max JSON body |
 | `OUTPUT_DIR` | `/output` | where the acceptance script writes |
