@@ -1,0 +1,30 @@
+{
+  "name": "qrgen",
+  "version": "1.0.0",
+  "description": "Print-ready and web-ready QR code generation for Hoops College and Chase Excellence",
+  "type": "module",
+  "main": "src/core.js",
+  "exports": {
+    ".": "./src/core.js",
+    "./client": "./client.js"
+  },
+  "bin": {
+    "qrgen": "./bin/qrgen.js"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node test/generate-all.js"
+  },
+  "dependencies": {
+    "archiver": "^7.0.1",
+    "express": "^4.21.2",
+    "qrcode": "^1.5.4",
+    "sharp": "^0.34.2",
+    "zod": "^3.24.1"
+  },
+  "private": true
+}

@@ -1,0 +1,31 @@
+# Portable Caddy equivalent of deploy/qr.hoopscollege.com.conf.
+#
+# NOT the active configuration on hc-new — that box serves :80/:443 from Apache,
+# with Coolify's Traefik installed but stopped. Keep this for a future migration
+# or for a host that does run Caddy.
+
+qr.hoopscollege.com {
+	encode zstd gzip
+
+	# Caddy sets X-Forwarded-For by default; qrgen relies on its presence to tell
+	# public traffic from internal traffic, so leave that behaviour alone.
+	reverse_proxy 127.0.0.1:3020 {
+		header_up X-Forwarded-Proto {scheme}
+		transport http {
+			read_timeout 120s
+		}
+	}
+
+	request_body {
+		max_size 20MB
+	}
+
+	log {
+		output file /var/log/caddy/qr.hoopscollege.com.log
+	}
+}
+
+# If Caddy itself runs in Docker on hc-internal, proxy to the container instead
+# of the published loopback port:
+#
+#   reverse_proxy qrgen:3000

@@ -1,0 +1,40 @@
+services:
+  qrgen:
+    build: .
+    image: qrgen:latest
+    # container_name doubles as the DNS name on hc-internal, so other services
+    # on the network reach this as http://qrgen:3000 with no proxy hop.
+    container_name: qrgen
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+      HOST: 0.0.0.0
+      QRGEN_LOGO_DIR: /output/logos
+    ports:
+      # Loopback only — public traffic arrives via the Apache vhost on hc-new.
+      - "127.0.0.1:${QRGEN_HOST_PORT:-3020}:3000"
+    volumes:
+      - qrgen-output:/output
+    networks:
+      - hc-internal
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  qrgen-output:
+
+networks:
+  hc-internal:
+    external: true
