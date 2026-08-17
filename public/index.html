@@ -200,8 +200,20 @@
   const TOKEN_KEY = 'qrgen.token';
   let current = null;   // { blob, filename, text }
 
+  // Be forgiving about how the token was copied: pasting a whole `.env` line or a
+  // quoted value is the obvious mistake, and it fails as an opaque 401 otherwise.
+  function normalizeToken(raw) {
+    return String(raw || '')
+      .trim()
+      .replace(/^QRGEN_TOKEN\s*=\s*/i, '')
+      .replace(/^["']|["']$/g, '')
+      .trim();
+  }
+
   const savedToken = localStorage.getItem(TOKEN_KEY);
   if (savedToken) $('token').value = savedToken;
+
+  $('token').addEventListener('change', () => { $('token').value = normalizeToken($('token').value); });
 
   // Byte capacity per error-correction level (QR version 40, byte mode).
   const CAPACITY = { L: 2953, M: 2331, Q: 1663, H: 1273 };
@@ -236,7 +248,8 @@
   });
 
   $('saveToken').addEventListener('click', () => {
-    const v = $('token').value.trim();
+    const v = normalizeToken($('token').value);
+    $('token').value = v;
     if (v) { localStorage.setItem(TOKEN_KEY, v); $('tokenHint').innerHTML = '<span class="ok">Saved in this browser.</span>'; }
     else { localStorage.removeItem(TOKEN_KEY); $('tokenHint').textContent = 'Cleared.'; }
   });
@@ -280,7 +293,8 @@
 
     try {
       const headers = { 'Content-Type': 'application/json' };
-      const token = $('token').value.trim();
+      const token = normalizeToken($('token').value);
+      $('token').value = token;
       if (token) headers.Authorization = 'Bearer ' + token;
 
       const res = await fetch('/generate', {
@@ -291,7 +305,9 @@
 
       if (res.status === 401) {
         $('tokenField').style.display = '';
-        throw new Error('This browser is outside hc-internal, so an API token is required. Enter it below and try again.');
+        throw new Error(token
+          ? 'That token was rejected. Copy only the value after "QRGEN_TOKEN=", with no quotes or spaces.'
+          : 'This browser is outside hc-internal, so an API token is required. Enter it below and try again.');
       }
       if (!res.ok) {
         let msg = res.status + ' ' + res.statusText;
