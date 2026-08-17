@@ -288,8 +288,9 @@ scp deploy/qr.hoopscollege.com.conf hc-new:/etc/apache2/sites-available/
 ssh hc-new 'a2ensite qr.hoopscollege.com && apache2ctl configtest && systemctl reload apache2'
 ```
 
-**DNS:** add `qr.hoopscollege.com` → `74.208.19.54` in Cloudflare. Nothing resolves until
-that record exists.
+**DNS:** add `qr.hoopscollege.com` → the hc-new origin IP in Cloudflare. Nothing resolves
+until that record exists. (The IP is omitted here deliberately: hoopscollege.com is
+proxied through Cloudflare, which masks the origin.)
 
 **Port 3020** is free on hc-new; 3000/3001/3010/3011/3031/8000/8080/8088/8099 are taken.
 
