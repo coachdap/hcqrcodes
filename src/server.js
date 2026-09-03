@@ -9,6 +9,7 @@ import { buildWifiPayload, buildVcardPayload } from './payloads.js';
 import { wifiRequestSchema, vcardRequestSchema, batchSchema } from './schema.js';
 import { bearerAuth, isInternalRequest } from './auth.js';
 import { rateLimit } from './ratelimit.js';
+import { analyzeSvg, convertSvg } from './svgconvert.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -17,10 +18,14 @@ const TRUST_INTERNAL = (process.env.QRGEN_TRUST_INTERNAL ?? 'true') !== 'false';
 const LOGO_DIR = process.env.QRGEN_LOGO_DIR ?? '/output/logos';
 const BODY_LIMIT = process.env.QRGEN_BODY_LIMIT ?? '10mb';
 
-const UI_HTML = readFileSync(
-  path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public', 'index.html'),
-  'utf8'
-);
+const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
+
+// Pages are read once at startup, like the rest of the app's config: a missing
+// file fails the boot rather than a request.
+const PAGES = {
+  '/ui': readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8'),
+  '/ui/utilities': readFileSync(path.join(PUBLIC_DIR, 'utilities.html'), 'utf8')
+};
 
 export function createApp() {
   const app = express();
@@ -33,8 +38,11 @@ export function createApp() {
     res.json({ status: 'ok', service: 'qrgen', uptime: Math.round(process.uptime()) });
   });
 
-  const ui = (req, res) => res.type('html').send(UI_HTML);
-  app.get('/ui', ui);
+  // Everything browser-facing stays under /ui (see the note on GET / below).
+  for (const [route, html] of Object.entries(PAGES)) {
+    app.get(route, (req, res) => res.type('html').send(html));
+  }
+  app.use('/ui', express.static(PUBLIC_DIR, { index: false, redirect: false, extensions: false }));
 
   // Lets the UI show or hide its token field without generating a throwaway QR.
   app.get('/auth', (req, res) => {
@@ -52,14 +60,17 @@ export function createApp() {
       description: 'QR code generation for Hoops College and Chase Excellence.',
       docs: 'https://github.com/coachdap/hcqrcodes',
       ui: 'https://qr.hoopscollege.com/ui',
-      note: 'All generation endpoints are POST with a JSON body. GET returns 405.',
+      utilities: 'https://qr.hoopscollege.com/ui/utilities',
+      note: 'All generation and conversion endpoints are POST with a JSON body. GET returns 405.',
       auth: 'Bearer token required for external callers; callers on hc-internal are exempt.',
       endpoints: {
         'GET  /health': 'liveness, no auth',
         'POST /generate': 'core generator — { data, format, size, margin, ecLevel, dark, light, logo, logoScale }',
         'POST /generate/wifi': '{ ssid, password, encryption, hidden } + render options',
         'POST /generate/vcard': '{ name, org, title, phone, email, url } + render options',
-        'POST /generate/batch': '{ items: [...], format } — returns a zip'
+        'POST /generate/batch': '{ items: [...], format } — returns a zip',
+        'POST /convert/svg': 'SVG → WebP/PNG — { svg, format, crop, cropRect, padding, width, height, scale, quality, lossless, background, name }',
+        'POST /convert/svg/analyze': '{ svg } — canvas (viewBox) and artwork bounds in user units'
       }
     });
   });
@@ -153,7 +164,27 @@ export function createApp() {
     }
   });
 
-  const POST_ROUTES = ['/generate', '/generate/wifi', '/generate/vcard', '/generate/batch'];
+  // --- Utilities: SVG → WebP/PNG -------------------------------------------
+  // Same guard chain as generation: the SVG travels as a JSON string, so the
+  // body limit, flood check and token check all apply unchanged.
+
+  app.post('/convert/svg', guard, async (req, res, next) => {
+    try {
+      sendImage(res, await convertSvg(req.body ?? {}));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  app.post('/convert/svg/analyze', guard, (req, res, next) => {
+    try {
+      res.json(analyzeSvg(req.body ?? {}));
+    } catch (err) {
+      next(err);
+    }
+  });
+
+  const POST_ROUTES = ['/generate', '/generate/wifi', '/generate/vcard', '/generate/batch', '/convert/svg', '/convert/svg/analyze'];
 
   app.use((req, res) => {
     // Right path, wrong method — say so, rather than implying the endpoint is missing.
@@ -222,6 +253,16 @@ function send(res, result) {
   res.setHeader('X-QR-Version', String(result.version));
   res.setHeader('X-QR-EC-Level', result.ecLevel);
   if (result.warnings.length) res.setHeader('X-QR-Warning', result.warnings.join(' | '));
+  res.status(200).end(result.buffer);
+}
+
+function sendImage(res, result) {
+  res.setHeader('Content-Type', result.contentType);
+  res.setHeader('Content-Length', result.buffer.length);
+  res.setHeader('Content-Disposition', `attachment; filename="${result.filename}"`);
+  res.setHeader('X-Image-Width', String(result.width));
+  res.setHeader('X-Image-Height', String(result.height));
+  if (result.warnings.length) res.setHeader('X-Image-Warning', result.warnings.join(' | '));
   res.status(200).end(result.buffer);
 }
 

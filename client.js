@@ -90,13 +90,29 @@ export function createClient(options = {}) {
     return new Uint8Array(await response.arrayBuffer());
   }
 
+  /**
+   * SVG → WebP/PNG bytes (the utilities endpoint). `svg` is the markup string;
+   * the other options match POST /convert/svg. Returns
+   * `{ data, width, height, warnings }` with `data` a Uint8Array.
+   */
+  async function convertSvg(options) {
+    const { response } = await request('/convert/svg', options);
+    const warning = response.headers.get('x-image-warning');
+    return {
+      data: new Uint8Array(await response.arrayBuffer()),
+      width: Number(response.headers.get('x-image-width')),
+      height: Number(response.headers.get('x-image-height')),
+      warnings: warning ? warning.split(' | ') : []
+    };
+  }
+
   async function health() {
     const response = await fetch(`${baseUrl}/health`, { signal: AbortSignal.timeout(timeoutMs) });
     if (!response.ok) throw new Error(`qrgen: health check failed (${response.status})`);
     return response.json();
   }
 
-  return { baseUrl, generate, svg, svgDataUri, png, wifi, vcard, batch, health };
+  return { baseUrl, generate, svg, svgDataUri, png, wifi, vcard, batch, convertSvg, health };
 }
 
 function base64(text) {

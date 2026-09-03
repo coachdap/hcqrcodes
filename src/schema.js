@@ -86,6 +86,49 @@ export const batchSchema = z.object({
   format: fields.format.optional()
 });
 
+// --- SVG → raster conversion (utilities) ------------------------------------
+
+/** Longest edge and total pixel ceiling for a converted image. */
+export const MAX_IMAGE_DIMENSION = 8192;
+export const MAX_IMAGE_PIXELS = 40_000_000;
+
+const finite = z.number().finite();
+
+/** A rectangle in the SVG's own user-unit coordinate space (viewBox units). */
+export const rectSchema = z.object({
+  x: finite,
+  y: finite,
+  width: finite.positive('width must be greater than 0'),
+  height: finite.positive('height must be greater than 0')
+});
+
+export const svgAnalyzeSchema = z.object({
+  svg: z.string().min(1, 'svg is required')
+});
+
+export const svgConvertSchema = z
+  .object({
+    svg: z.string().min(1, 'svg is required'),
+    format: z.enum(['webp', 'png']).default('webp'),
+    quality: z.number().int().min(1).max(100).default(90),
+    lossless: z.boolean().default(false),
+    background: z.union([z.literal('transparent'), hex]).default('transparent'),
+    crop: z.enum(['original', 'artwork', 'custom']).default('artwork'),
+    cropRect: rectSchema.optional(),
+    /** Extra room around the crop, in user units. */
+    padding: finite.min(0).max(10000).default(0),
+    width: z.number().int().min(1).max(MAX_IMAGE_DIMENSION).optional(),
+    height: z.number().int().min(1).max(MAX_IMAGE_DIMENSION).optional(),
+    /** Pixels per user unit when neither width nor height is given. */
+    scale: finite.min(0.01).max(64).default(1),
+    /** Filename stem for Content-Disposition. */
+    name: z.string().max(200).optional()
+  })
+  .refine((v) => v.crop !== 'custom' || v.cropRect, {
+    message: 'cropRect is required when crop is "custom"',
+    path: ['cropRect']
+  });
+
 /**
  * Resolve the effective error-correction level. A logo occludes the centre of
  * the symbol, so H is forced whenever one is supplied regardless of the request.

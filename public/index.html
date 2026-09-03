@@ -4,101 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>qrgen</title>
+<link rel="stylesheet" href="/ui/shared.css">
 <style>
-  :root {
-    --navy: #0B1F3A;
-    --bg: #f6f7f9;
-    --panel: #ffffff;
-    --text: #14181f;
-    --muted: #5d6672;
-    --line: #dfe3e9;
-    --accent: #0B1F3A;
-    --warn-bg: #fdf3e3;
-    --warn-line: #e5c07b;
-    --warn-text: #6b4e12;
-    --err-bg: #fdeaea;
-    --err-line: #e0a0a0;
-    --err-text: #8a2020;
-    --radius: 10px;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #12151a;
-      --panel: #1a1f27;
-      --text: #e8ebef;
-      --muted: #96a0ad;
-      --line: #2b323d;
-      --accent: #5b8fd6;
-      --warn-bg: #2e2716;
-      --warn-line: #6b5a24;
-      --warn-text: #e2c68a;
-      --err-bg: #2e1a1a;
-      --err-line: #6b3030;
-      --err-text: #f0b0b0;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 1040px; margin: 0 auto; padding: 28px 20px 60px; }
-  header { margin-bottom: 22px; }
-  h1 { font-size: 21px; margin: 0 0 4px; letter-spacing: -0.01em; }
-  .sub { color: var(--muted); font-size: 13.5px; }
-  .grid { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,420px); gap: 20px; align-items: start; }
-  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
-  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; }
-  label { display: block; font-size: 12.5px; font-weight: 600; color: var(--muted); margin-bottom: 6px; letter-spacing: 0.01em; }
-  input[type=text], input[type=url], input[type=password], input[type=number], select {
-    width: 100%; padding: 9px 11px; font-size: 14px; font-family: inherit;
-    background: var(--bg); color: var(--text);
-    border: 1px solid var(--line); border-radius: 8px;
-  }
-  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: -1px; border-color: transparent; }
-  input[type=color] { width: 100%; height: 38px; padding: 3px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; }
-  .field { margin-bottom: 14px; }
-  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-  .row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
-  button {
-    font: 600 14.5px/1 inherit; padding: 11px 16px; border-radius: 8px; cursor: pointer;
-    border: 1px solid transparent; background: var(--navy); color: #fff;
-  }
-  @media (prefers-color-scheme: dark) { button { background: var(--accent); color: #0d1117; } }
-  button:hover { filter: brightness(1.12); }
-  button:disabled { opacity: 0.55; cursor: default; filter: none; }
-  button.ghost { background: transparent; color: var(--text); border-color: var(--line); }
-  .actions { display: flex; gap: 9px; flex-wrap: wrap; margin-top: 4px; }
-  .preview {
-    display: flex; align-items: center; justify-content: center;
-    min-height: 300px; padding: 18px; border-radius: 8px;
-    background: repeating-conic-gradient(#e9ecf1 0% 25%, #f7f9fb 0% 50%) 50%/18px 18px;
-  }
+  .preview { display: flex; align-items: center; justify-content: center; min-height: 300px; padding: 18px; border-radius: 8px; }
   .preview svg, .preview img { width: 100%; height: auto; max-width: 340px; display: block; }
-  .placeholder { color: #7b8592; font-size: 13.5px; text-align: center; }
-  .meta { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 14px; font-size: 13px; color: var(--muted); }
-  .meta b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
-  .note { margin-top: 14px; padding: 10px 12px; border-radius: 8px; font-size: 13px; }
-  .note.warn { background: var(--warn-bg); border: 1px solid var(--warn-line); color: var(--warn-text); }
-  .note.err { background: var(--err-bg); border: 1px solid var(--err-line); color: var(--err-text); }
-  .hint { font-size: 12px; color: var(--muted); margin-top: 5px; }
-  details { margin-top: 4px; }
-  summary { cursor: pointer; font-size: 13px; color: var(--muted); font-weight: 600; padding: 4px 0; }
-  details[open] summary { margin-bottom: 12px; }
-  .tokenbar { display: flex; gap: 9px; align-items: flex-end; }
-  .tokenbar .field { flex: 1; margin-bottom: 0; }
-  .ok { color: #2e7d32; }
-  @media (prefers-color-scheme: dark) { .ok { color: #81c784; } }
 </style>
 </head>
 <body>
 <div class="wrap">
-  <header>
-    <h1>qrgen</h1>
-    <div class="sub">Print-ready QR codes for Hoops College &amp; Chase Excellence.</div>
+  <header class="masthead">
+    <a class="brand" href="/ui">qrgen <small>Hoops College &amp; Chase Excellence</small></a>
+    <nav class="nav" aria-label="Tools">
+      <a href="/ui" aria-current="page">QR code</a>
+      <a href="/ui/utilities">Utilities</a>
+    </nav>
+  </header>
+
+  <header class="page">
+    <h1>QR code</h1>
+    <div class="sub">Print-ready QR codes for flyers, signage, jersey tags and registration links.</div>
   </header>
 
   <div class="grid">
@@ -163,7 +87,7 @@
         </div>
       </details>
 
-      <div class="field" id="tokenField" style="display:none">
+      <div class="field" id="tokenField" hidden>
         <div class="tokenbar">
           <div class="field">
             <label for="token">API token</label>
@@ -181,11 +105,11 @@
     </form>
 
     <div class="panel">
-      <div class="preview" id="preview">
+      <div class="preview checker" id="preview">
         <div class="placeholder">Your QR code will appear here.</div>
       </div>
       <div class="meta" id="meta"></div>
-      <div class="actions" id="outActions" style="display:none">
+      <div class="actions" id="outActions" hidden>
         <button type="button" id="download">Download</button>
         <button type="button" class="ghost" id="copy">Copy markup</button>
       </div>
@@ -194,26 +118,11 @@
   </div>
 </div>
 
+<script src="/ui/shared.js"></script>
 <script>
 (function () {
-  const $ = (id) => document.getElementById(id);
-  const TOKEN_KEY = 'qrgen.token';
+  const { $, api, note, downloadBlob } = qrgenUI;
   let current = null;   // { blob, filename, text }
-
-  // Be forgiving about how the token was copied: pasting a whole `.env` line or a
-  // quoted value is the obvious mistake, and it fails as an opaque 401 otherwise.
-  function normalizeToken(raw) {
-    return String(raw || '')
-      .trim()
-      .replace(/^QRGEN_TOKEN\s*=\s*/i, '')
-      .replace(/^["']|["']$/g, '')
-      .trim();
-  }
-
-  const savedToken = localStorage.getItem(TOKEN_KEY);
-  if (savedToken) $('token').value = savedToken;
-
-  $('token').addEventListener('change', () => { $('token').value = normalizeToken($('token').value); });
 
   // Byte capacity per error-correction level (QR version 40, byte mode).
   const CAPACITY = { L: 2953, M: 2331, Q: 1663, H: 1273 };
@@ -247,13 +156,6 @@
       : 'Sets width/height; SVG stays scalable.';
   });
 
-  $('saveToken').addEventListener('click', () => {
-    const v = normalizeToken($('token').value);
-    $('token').value = v;
-    if (v) { localStorage.setItem(TOKEN_KEY, v); $('tokenHint').innerHTML = '<span class="ok">Saved in this browser.</span>'; }
-    else { localStorage.removeItem(TOKEN_KEY); $('tokenHint').textContent = 'Cleared.'; }
-  });
-
   function readFileAsDataUrl(file) {
     return new Promise((resolve, reject) => {
       const r = new FileReader();
@@ -261,10 +163,6 @@
       r.onerror = () => reject(new Error('could not read the logo file'));
       r.readAsDataURL(file);
     });
-  }
-
-  function note(kind, message) {
-    $('notes').innerHTML += `<div class="note ${kind}">${message}</div>`;
   }
 
   async function buildBody() {
@@ -292,32 +190,7 @@
     $('go').textContent = 'Generating…';
 
     try {
-      const headers = { 'Content-Type': 'application/json' };
-      const token = normalizeToken($('token').value);
-      $('token').value = token;
-      if (token) headers.Authorization = 'Bearer ' + token;
-
-      const res = await fetch('/generate', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(await buildBody())
-      });
-
-      if (res.status === 401) {
-        $('tokenField').style.display = '';
-        throw new Error(token
-          ? 'That token was rejected. Copy only the value after "QRGEN_TOKEN=", with no quotes or spaces.'
-          : 'This browser is outside hc-internal, so an API token is required. Enter it below and try again.');
-      }
-      if (!res.ok) {
-        let msg = res.status + ' ' + res.statusText;
-        try {
-          const j = await res.json();
-          if (j?.error?.message) msg = j.error.message;
-          if (j?.error?.details) msg += '<br><small>' + j.error.details.map(d => `${d.path}: ${d.message}`).join('<br>') + '</small>';
-        } catch (_) {}
-        throw new Error(msg);
-      }
+      const res = await api('/generate', await buildBody());
 
       const version = res.headers.get('x-qr-version');
       const ec = res.headers.get('x-qr-ec-level');
@@ -345,15 +218,15 @@
         `<span>QR version <b>${version}</b></span>` +
         `<span>EC level <b>${ec}</b></span>` +
         `<span>Size <b>${(blob.size / 1024).toFixed(1)} KB</b></span>`;
-      $('outActions').style.display = '';
-      $('copy').style.display = isSvg ? '' : 'none';
+      $('outActions').hidden = false;
+      $('copy').hidden = !isSvg;
 
-      if (warning) warning.split(' | ').forEach(w => note('warn', w));
+      if (warning) warning.split(' | ').forEach(w => note($('notes'), 'warn', w));
     } catch (err) {
       $('preview').innerHTML = '<div class="placeholder">No output.</div>';
       $('meta').innerHTML = '';
-      $('outActions').style.display = 'none';
-      note('err', err.message);
+      $('outActions').hidden = true;
+      note($('notes'), 'err', err.message);
     } finally {
       $('go').disabled = false;
       $('go').textContent = 'Generate';
@@ -361,15 +234,7 @@
   });
 
   $('download').addEventListener('click', () => {
-    if (!current) return;
-    const url = URL.createObjectURL(current.blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = current.filename;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    if (current) downloadBlob(current.blob, current.filename);
   });
 
   $('copy').addEventListener('click', async () => {
@@ -385,18 +250,12 @@
     $('preview').innerHTML = '<div class="placeholder">Your QR code will appear here.</div>';
     $('meta').innerHTML = '';
     $('notes').innerHTML = '';
-    $('outActions').style.display = 'none';
+    $('outActions').hidden = true;
     current = null;
     updateCapacity();
   });
 
-  // Ask the server whether this browser needs a token, rather than burning a
-  // generate call (and a rate-limit unit) on every page load.
-  fetch('/auth')
-    .then(r => r.json())
-    .then(info => { if (info.tokenRequired) $('tokenField').style.display = ''; })
-    .catch(() => { $('tokenField').style.display = ''; });
-
+  qrgenUI.initToken();
   updateCapacity();
 })();
 </script>

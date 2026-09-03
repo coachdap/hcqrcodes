@@ -7,8 +7,16 @@ ENV NODE_ENV=production \
 
 WORKDIR /app
 
+# The SVG converter rasterises <text> with whatever fonts the image has, and a
+# slim image has none. Liberation covers Arial/Helvetica/Times/Courier by metric
+# and DejaVu the generic families, which is enough for flyer and logo SVGs.
+# Convert text to outlines in the source for exact fidelity.
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends fonts-liberation fonts-dejavu-core \
+  && rm -rf /var/lib/apt/lists/*
+
 # Dependencies first, so source edits don't invalidate the install layer.
-# sharp ships prebuilt linux glibc binaries, so no build toolchain is needed.
+# sharp and resvg ship prebuilt linux glibc binaries, so no build toolchain is needed.
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 

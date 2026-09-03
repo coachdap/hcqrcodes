@@ -1,0 +1,700 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Utilities · qrgen</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .dropzone {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+    min-height: 360px; border: 2px dashed var(--line); cursor: pointer; text-align: center;
+    transition: border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.over { border-color: var(--accent); background: var(--soft); }
+  .dropzone .icon { width: 52px; height: 52px; display: grid; place-items: center; border-radius: 14px; background: var(--accent); color: var(--accent-text); font-size: 24px; margin-bottom: 10px; }
+  .dropzone h2 { margin: 0; font-size: 19px; }
+  .dropzone p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .dropzone kbd { font: 600 12px/1 inherit; padding: 2px 6px; border: 1px solid var(--line); border-radius: 5px; background: var(--panel); }
+
+  .panel-head { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; min-width: 0; }
+  .panel-head .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .panel-head .muted { color: var(--muted); font-size: 12.5px; white-space: nowrap; }
+  .panel-head button { margin-left: auto; }
+
+  .stage-wrap { display: grid; place-items: center; padding: 14px; border-radius: 8px; min-height: 260px; }
+  .stage { position: relative; touch-action: none; user-select: none; -webkit-user-select: none; }
+  .stage img { display: block; width: 100%; height: 100%; pointer-events: none; }
+  .shade { position: absolute; background: rgba(0,0,0,.45); pointer-events: none; }
+  .padbox { position: absolute; border: 1px dashed rgba(255,255,255,.85); pointer-events: none; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+  .cropbox { position: absolute; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.6); cursor: move; outline: none; }
+  .cropbox:focus-visible { border-color: var(--accent); }
+  .cropsize {
+    position: absolute; left: 50%; top: -30px; transform: translateX(-50%);
+    background: #14181f; color: #fff; border-radius: 6px; padding: 4px 8px; font-size: 11.5px; font-weight: 600;
+    white-space: nowrap; pointer-events: none; font-variant-numeric: tabular-nums;
+  }
+  .cropbox.inside .cropsize { top: 6px; left: 6px; transform: none; }
+  .handle { position: absolute; width: 14px; height: 14px; padding: 0; border: 2px solid #14181f; background: #fff; border-radius: 3px; z-index: 2; }
+  .handle:hover { filter: none; background: var(--soft); }
+  .handle.nw { left: -8px; top: -8px; cursor: nwse-resize; }
+  .handle.n  { left: 50%; top: -8px; transform: translateX(-50%); cursor: ns-resize; }
+  .handle.ne { right: -8px; top: -8px; cursor: nesw-resize; }
+  .handle.e  { right: -8px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+  .handle.se { right: -8px; bottom: -8px; cursor: nwse-resize; }
+  .handle.s  { left: 50%; bottom: -8px; transform: translateX(-50%); cursor: ns-resize; }
+  .handle.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
+  .handle.w  { left: -8px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+
+  .section { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 4px 0 12px; }
+  .section + .section { margin-top: 0; }
+  hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
+  .row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .unit { position: relative; }
+  .unit input { padding-right: 34px; }
+  .unit em { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); font-style: normal; pointer-events: none; }
+  .inline { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
+  .toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--text); margin: 0; cursor: pointer; }
+  .toggle input { width: auto; margin: 0; accent-color: var(--accent); }
+  .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--soft); border-radius: 8px; }
+  .seg button { padding: 6px 12px; font-size: 13px; background: transparent; color: var(--muted); border: 0; }
+  .seg button:hover { filter: none; color: var(--text); }
+  .seg button.on { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
+  .sizerow { display: grid; grid-template-columns: 1fr 34px 1fr; gap: 8px; align-items: end; }
+  .sizerow .lock { height: 38px; padding: 0; font-size: 15px; background: var(--soft); color: var(--muted); border: 0; }
+  .sizerow .lock.on { color: var(--text); background: var(--line); }
+  .rangehead { display: flex; justify-content: space-between; }
+  .rangehead b { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  .result { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+  .result .thumb { display: grid; place-items: center; padding: 14px; }
+  .result .thumb img { max-width: 100%; max-height: 220px; display: block; }
+  .result .bar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-top: 1px solid var(--line); font-size: 13px; flex-wrap: wrap; }
+  .result .bar b { font-weight: 600; font-variant-numeric: tabular-nums; }
+  .result .bar .grow { flex: 1; }
+  textarea.source { height: 220px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; resize: vertical; white-space: pre; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="masthead">
+    <a class="brand" href="/ui">qrgen <small>Hoops College &amp; Chase Excellence</small></a>
+    <nav class="nav" aria-label="Tools">
+      <a href="/ui">QR code</a>
+      <a href="/ui/utilities" aria-current="page">Utilities</a>
+    </nav>
+  </header>
+
+  <header class="page">
+    <h1>SVG → WebP</h1>
+    <div class="sub">Crop a vector exactly where you want it, then export a clean WebP or PNG at any size.</div>
+  </header>
+
+  <div class="panel dropzone" id="drop" tabindex="0" role="button" aria-label="Choose an SVG file">
+    <div class="icon">↑</div>
+    <h2>Drop an SVG here</h2>
+    <p>or click to choose a file, or <kbd>⌘V</kbd> paste SVG markup</p>
+    <p class="hint">Up to 8 MB. Text is rendered with the server's fonts, so convert type to outlines for exact results.</p>
+    <input type="file" id="file" accept=".svg,image/svg+xml" hidden>
+  </div>
+
+  <div class="grid" id="editor" hidden>
+    <div class="panel">
+      <div class="panel-head">
+        <span class="name" id="fileName"></span>
+        <span class="muted" id="canvasInfo"></span>
+        <button type="button" class="ghost small" id="change">Change file</button>
+      </div>
+      <div class="stage-wrap checker" id="stageWrap">
+        <div class="stage" id="stage">
+          <img id="preview" alt="SVG preview" draggable="false">
+          <div class="shade" id="shadeT"></div>
+          <div class="shade" id="shadeR"></div>
+          <div class="shade" id="shadeB"></div>
+          <div class="shade" id="shadeL"></div>
+          <div class="padbox" id="padbox" hidden></div>
+          <div class="cropbox" id="cropbox" tabindex="0" aria-label="Crop area. Drag to move, arrow keys to nudge.">
+            <span class="cropsize" id="cropsize"></span>
+            <button type="button" class="handle nw" data-h="nw" aria-label="Resize top-left"></button>
+            <button type="button" class="handle n"  data-h="n"  aria-label="Resize top"></button>
+            <button type="button" class="handle ne" data-h="ne" aria-label="Resize top-right"></button>
+            <button type="button" class="handle e"  data-h="e"  aria-label="Resize right"></button>
+            <button type="button" class="handle se" data-h="se" aria-label="Resize bottom-right"></button>
+            <button type="button" class="handle s"  data-h="s"  aria-label="Resize bottom"></button>
+            <button type="button" class="handle sw" data-h="sw" aria-label="Resize bottom-left"></button>
+            <button type="button" class="handle w"  data-h="w"  aria-label="Resize left"></button>
+          </div>
+        </div>
+      </div>
+      <div class="meta">
+        <span>Canvas <b id="mCanvas"></b></span>
+        <span>Crop <b id="mCrop"></b></span>
+        <span>Export <b id="mExport"></b></span>
+      </div>
+      <div id="previewNotes"></div>
+      <details style="margin-top:14px">
+        <summary>SVG source</summary>
+        <textarea class="source" id="source" spellcheck="false"></textarea>
+        <div class="hint">Edits re-analyse the artwork and are what gets exported.</div>
+      </details>
+    </div>
+
+    <form class="panel" id="form">
+      <div class="section">Crop</div>
+      <div class="inline" style="margin-bottom:12px">
+        <div class="seg" role="group" aria-label="Crop preset">
+          <button type="button" id="presetArtwork">Artwork</button>
+          <button type="button" id="presetCanvas">Full canvas</button>
+        </div>
+        <label class="toggle" style="margin-left:auto"><input type="checkbox" id="lockRatio"> Lock ratio</label>
+      </div>
+      <div class="row-4">
+        <div class="field"><label for="cx">X</label><div class="unit"><input type="number" id="cx" step="any"></div></div>
+        <div class="field"><label for="cy">Y</label><div class="unit"><input type="number" id="cy" step="any"></div></div>
+        <div class="field"><label for="cw">Width</label><div class="unit"><input type="number" id="cw" step="any" min="1"></div></div>
+        <div class="field"><label for="ch">Height</label><div class="unit"><input type="number" id="ch" step="any" min="1"></div></div>
+      </div>
+      <div class="field">
+        <div class="rangehead"><label for="padding">Padding</label><b id="paddingVal">0</b></div>
+        <input type="range" id="padding" min="0" max="100" value="0" step="1">
+        <div class="hint">Breathing room around the crop, in the SVG's own units.</div>
+      </div>
+
+      <hr>
+      <div class="section">Output</div>
+      <div class="row">
+        <div class="field">
+          <label for="format">Format</label>
+          <select id="format">
+            <option value="webp">WebP</option>
+            <option value="png">PNG</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="background">Background</label>
+          <div class="inline" style="flex-wrap:nowrap">
+            <select id="background">
+              <option value="transparent">Transparent</option>
+              <option value="#FFFFFF">White</option>
+              <option value="#000000">Black</option>
+              <option value="#0B1F3A">HC navy</option>
+              <option value="custom">Custom…</option>
+            </select>
+            <input type="color" id="bgColor" value="#FFFFFF" style="width:46px;flex:none" hidden>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Size</label>
+        <div class="inline" style="margin-bottom:8px">
+          <div class="seg" role="group" aria-label="Scale">
+            <button type="button" data-scale="1">1×</button>
+            <button type="button" data-scale="2">2×</button>
+            <button type="button" data-scale="3">3×</button>
+            <button type="button" data-scale="4">4×</button>
+          </div>
+        </div>
+        <div class="sizerow">
+          <div class="unit"><input type="number" id="outW" min="1" max="8192" placeholder="auto" aria-label="Output width"><em>px</em></div>
+          <button type="button" class="lock on" id="sizeLock" title="Keep aspect ratio" aria-pressed="true">⛓</button>
+          <div class="unit"><input type="number" id="outH" min="1" max="8192" placeholder="auto" aria-label="Output height"><em>px</em></div>
+        </div>
+        <div class="hint" id="sizeHint"></div>
+      </div>
+
+      <div class="field" id="qualityField">
+        <div class="rangehead"><label for="quality">Quality</label><b id="qualityVal">90</b></div>
+        <input type="range" id="quality" min="1" max="100" value="90">
+      </div>
+      <div class="field" id="losslessField">
+        <label class="toggle"><input type="checkbox" id="lossless"> Lossless WebP (larger file, pixel-exact edges)</label>
+      </div>
+
+      <div class="field" id="tokenField" hidden>
+        <div class="tokenbar">
+          <div class="field">
+            <label for="token">API token</label>
+            <input type="password" id="token" placeholder="required from outside hc-internal" autocomplete="off">
+          </div>
+          <button type="button" class="ghost" id="saveToken">Remember</button>
+        </div>
+        <div class="hint" id="tokenHint">Stored in this browser only.</div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="go">Convert</button>
+      </div>
+
+      <div class="result" id="result" hidden>
+        <div class="thumb checker"><img id="resultImg" alt="Converted image"></div>
+        <div class="bar">
+          <span><b id="rDims"></b> · <b id="rBytes"></b> · <span id="rFormat"></span></span>
+          <span class="grow"></span>
+          <button type="button" class="small" id="download">Download</button>
+        </div>
+      </div>
+      <div id="notes"></div>
+    </form>
+  </div>
+</div>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, api, note, formatBytes, downloadBlob, escapeHtml } = qrgenUI;
+  const MAX_FILE_BYTES = 8 * 1024 * 1024;
+  const MIN_CROP = 1;
+  const STAGE_MAX_HEIGHT = 560;
+
+  const S = {
+    name: '',
+    svg: '',
+    canvas: null,       // { x, y, width, height } in user units (the viewBox)
+    artwork: null,      // auto-detected bounds, or null
+    crop: null,         // current crop rect in user units
+    lockRatio: false,
+    padding: 0,
+    scale: 1,
+    sizeLock: true,
+    lastDim: 'width',   // which of width/height the user typed last
+    previewUrl: '',
+    result: null,       // { blob, filename, url, width, height }
+    analyzeSeq: 0
+  };
+
+  // --- loading ---------------------------------------------------------------
+
+  function localCanvas(svg) {
+    const root = svg.match(/<svg\b[^>]*>/i)?.[0] || '';
+    const vb = root.match(/\bviewBox\s*=\s*["']\s*([-+\d.eE]+)[\s,]+([-+\d.eE]+)[\s,]+([-+\d.eE]+)[\s,]+([-+\d.eE]+)\s*["']/i);
+    if (vb) {
+      const [x, y, width, height] = vb.slice(1).map(Number);
+      if (width > 0 && height > 0) return { x, y, width, height };
+    }
+    const len = (v) => { const m = (v || '').trim().match(/^([\d.]+)/); return m ? Number(m[1]) : 0; };
+    const width = len(root.match(/\bwidth\s*=\s*["']([^"']+)["']/i)?.[1]);
+    const height = len(root.match(/\bheight\s*=\s*["']([^"']+)["']/i)?.[1]);
+    return { x: 0, y: 0, width: width || 300, height: height || 150 };
+  }
+
+  async function loadSvg(text, name) {
+    text = text.replace(/^\uFEFF/, '');
+    if (!/<svg[\s>]/i.test(text)) return fail('That does not look like an SVG document.');
+    if (text.length > MAX_FILE_BYTES) return fail('SVG is too large. The limit is 8 MB.');
+
+    clearResult();
+    $('notes').innerHTML = '';
+    $('previewNotes').innerHTML = '';
+    S.name = name;
+    S.svg = text;
+    S.canvas = localCanvas(text);
+    S.artwork = null;
+    S.crop = { ...S.canvas };
+    S.padding = 0; $('padding').value = 0;
+    $('outW').value = ''; $('outH').value = ''; S.scale = 1;
+    $('source').value = text;
+    $('fileName').textContent = name;
+
+    $('drop').hidden = true;
+    $('editor').hidden = false;
+    updatePreview();
+    render();
+    await analyze();
+  }
+
+  async function analyze() {
+    const seq = ++S.analyzeSeq;
+    try {
+      const res = await api('/convert/svg/analyze', { svg: S.svg });
+      const info = await res.json();
+      if (seq !== S.analyzeSeq) return;
+      S.canvas = info.canvas;
+      S.artwork = info.bbox ? intersect(info.bbox, info.canvas) : null;
+      S.crop = clamp(S.artwork ? { ...S.artwork } : { ...S.canvas });
+      $('previewNotes').innerHTML = '';
+      if (!S.artwork) note($('previewNotes'), 'warn', 'No visible artwork was detected, so the crop starts at the full canvas.');
+      if (info.hasText) note($('previewNotes'), 'warn', 'This SVG contains live text. It renders with the server\'s fonts (Liberation / DejaVu); convert type to outlines for an exact match.');
+      updatePreview();
+      render();
+    } catch (err) {
+      if (seq !== S.analyzeSeq) return;
+      $('previewNotes').innerHTML = '';
+      note($('previewNotes'), 'err', 'Artwork bounds could not be detected: ' + err.message + ' You can still crop by hand.');
+      render();
+    }
+  }
+
+  function fail(message) {
+    $('notes').innerHTML = '';
+    note($('notes'), 'err', escapeHtml(message));
+    if ($('editor').hidden) alert(message);
+  }
+
+  // Mirror of the server's setRootViewport: the preview shows the canvas with
+  // width/height forced to match, so what you crop is exactly what renders.
+  function withViewport(svg, rect) {
+    const m = svg.match(/<svg\b[^>]*>/i);
+    if (!m) return svg;
+    let root = m[0];
+    const set = (name, value) => {
+      const re = new RegExp('\\s' + name + '\\s*=\\s*("[^"]*"|\'[^\']*\')', 'i');
+      root = re.test(root) ? root.replace(re, ' ' + name + '="' + value + '"') : root.replace(/\s*(\/?)>$/, ' ' + name + '="' + value + '"$1>');
+    };
+    set('viewBox', [rect.x, rect.y, rect.width, rect.height].map(fmt).join(' '));
+    set('width', fmt(rect.width));
+    set('height', fmt(rect.height));
+    root = root.replace(/\spreserveAspectRatio\s*=\s*("[^"]*"|'[^']*')/i, '');
+    return svg.slice(0, m.index) + root + svg.slice(m.index + m[0].length);
+  }
+
+  function updatePreview() {
+    if (S.previewUrl) URL.revokeObjectURL(S.previewUrl);
+    S.previewUrl = URL.createObjectURL(new Blob([withViewport(S.svg, S.canvas)], { type: 'image/svg+xml' }));
+    $('preview').src = S.previewUrl;
+  }
+
+  // --- geometry --------------------------------------------------------------
+
+  function fmt(n) { return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(3))); }
+
+  function intersect(a, b) {
+    const x = Math.max(a.x, b.x), y = Math.max(a.y, b.y);
+    const r = Math.min(a.x + a.width, b.x + b.width), btm = Math.min(a.y + a.height, b.y + b.height);
+    return r - x > 0 && btm - y > 0 ? { x, y, width: r - x, height: btm - y } : null;
+  }
+
+  function clamp(c) {
+    const cv = S.canvas;
+    const x = Math.min(Math.max(c.x, cv.x), cv.x + cv.width - MIN_CROP);
+    const y = Math.min(Math.max(c.y, cv.y), cv.y + cv.height - MIN_CROP);
+    const width = Math.max(MIN_CROP, Math.min(c.width, cv.x + cv.width - x));
+    const height = Math.max(MIN_CROP, Math.min(c.height, cv.y + cv.height - y));
+    return { x: round(x), y: round(y), width: round(width), height: round(height) };
+  }
+
+  // Keep sub-unit precision for small viewBoxes (icons are often 24 units wide).
+  function round(n) { return Math.round(n * 100) / 100; }
+
+  function resizeCrop(start, handle, dx, dy) {
+    const cv = S.canvas;
+    if (handle === 'move') {
+      return clamp({
+        x: Math.min(Math.max(cv.x, start.x + dx), cv.x + cv.width - start.width),
+        y: Math.min(Math.max(cv.y, start.y + dy), cv.y + cv.height - start.height),
+        width: start.width, height: start.height
+      });
+    }
+    let left = start.x, top = start.y, right = start.x + start.width, bottom = start.y + start.height;
+    if (handle.includes('w')) left += dx;
+    if (handle.includes('e')) right += dx;
+    if (handle.includes('n')) top += dy;
+    if (handle.includes('s')) bottom += dy;
+
+    if (S.lockRatio) {
+      const ratio = start.width / start.height;
+      const corner = handle.length === 2;
+      if (corner) {
+        // Drive by whichever axis moved more; derive the other.
+        const w = right - left, h = bottom - top;
+        if (Math.abs(dx) >= Math.abs(dy)) { const nh = w / ratio; if (handle.includes('n')) top = bottom - nh; else bottom = top + nh; }
+        else { const nw = h * ratio; if (handle.includes('w')) left = right - nw; else right = left + nw; }
+      } else if (handle === 'n' || handle === 's') {
+        const nw = (bottom - top) * ratio; const cx = left + (right - left) / 2; left = cx - nw / 2; right = cx + nw / 2;
+      } else {
+        const nh = (right - left) / ratio; const cy = top + (bottom - top) / 2; top = cy - nh / 2; bottom = cy + nh / 2;
+      }
+    }
+
+    if (right - left < MIN_CROP) { if (handle.includes('w')) left = right - MIN_CROP; else right = left + MIN_CROP; }
+    if (bottom - top < MIN_CROP) { if (handle.includes('n')) top = bottom - MIN_CROP; else bottom = top + MIN_CROP; }
+    left = Math.max(cv.x, left); top = Math.max(cv.y, top);
+    right = Math.min(cv.x + cv.width, right); bottom = Math.min(cv.y + cv.height, bottom);
+    return clamp({ x: left, y: top, width: right - left, height: bottom - top });
+  }
+
+  function exportRect() {
+    const p = S.padding;
+    return { x: S.crop.x - p, y: S.crop.y - p, width: S.crop.width + p * 2, height: S.crop.height + p * 2 };
+  }
+
+  /** Output pixel size implied by the current controls. */
+  function outputSize() {
+    const r = exportRect();
+    const w = Number($('outW').value) || 0, h = Number($('outH').value) || 0;
+    if (w && h && !S.sizeLock) return { width: w, height: h, mode: 'box' };
+    if (w && (S.sizeLock ? S.lastDim === 'width' : true)) return { width: w, height: Math.round(w * r.height / r.width), mode: 'width' };
+    if (h) return { width: Math.round(h * r.width / r.height), height: h, mode: 'height' };
+    if (w) return { width: w, height: Math.round(w * r.height / r.width), mode: 'width' };
+    return { width: Math.round(r.width * S.scale), height: Math.round(r.height * S.scale), mode: 'scale' };
+  }
+
+  // --- rendering -------------------------------------------------------------
+
+  function render() {
+    if (!S.canvas || !S.crop) return;
+    const cv = S.canvas, c = S.crop;
+
+    // Size the stage to the canvas aspect so the overlay maps 1:1 onto the image.
+    const wrap = $('stageWrap');
+    const maxW = Math.max(120, wrap.clientWidth - 28);
+    const s = Math.min(maxW / cv.width, STAGE_MAX_HEIGHT / cv.height);
+    const stage = $('stage');
+    stage.style.width = (cv.width * s) + 'px';
+    stage.style.height = (cv.height * s) + 'px';
+
+    const pct = (v, total) => (v / total * 100) + '%';
+    const L = pct(c.x - cv.x, cv.width), T = pct(c.y - cv.y, cv.height);
+    const W = pct(c.width, cv.width), H = pct(c.height, cv.height);
+    const R = pct(cv.x + cv.width - (c.x + c.width), cv.width);
+    const B = pct(cv.y + cv.height - (c.y + c.height), cv.height);
+
+    Object.assign($('shadeT').style, { left: 0, right: 0, top: 0, height: T });
+    Object.assign($('shadeB').style, { left: 0, right: 0, bottom: 0, height: B });
+    Object.assign($('shadeL').style, { left: 0, top: T, height: H, width: L });
+    Object.assign($('shadeR').style, { right: 0, top: T, height: H, width: R });
+
+    const box = $('cropbox');
+    Object.assign(box.style, { left: L, top: T, width: W, height: H });
+    box.classList.toggle('inside', (c.y - cv.y) * s < 32);
+    $('cropsize').textContent = fmt(c.width) + ' × ' + fmt(c.height);
+
+    const pb = $('padbox');
+    if (S.padding > 0) {
+      const e = exportRect();
+      pb.hidden = false;
+      Object.assign(pb.style, {
+        left: pct(e.x - cv.x, cv.width), top: pct(e.y - cv.y, cv.height),
+        width: pct(e.width, cv.width), height: pct(e.height, cv.height)
+      });
+    } else pb.hidden = true;
+
+    for (const k of ['x', 'y', 'width', 'height']) {
+      const el = $('c' + k[0]);
+      if (document.activeElement !== el) el.value = fmt(c[k]);
+    }
+
+    $('presetArtwork').classList.toggle('on', !!S.artwork && same(c, S.artwork));
+    $('presetCanvas').classList.toggle('on', same(c, cv));
+    $('presetArtwork').disabled = !S.artwork;
+
+    const out = outputSize();
+    const usingScale = out.mode === 'scale';
+    document.querySelectorAll('[data-scale]').forEach((b) => b.classList.toggle('on', usingScale && Number(b.dataset.scale) === S.scale));
+    if (S.sizeLock) {
+      if (S.lastDim === 'width' && $('outW').value) $('outH').value = out.height;
+      else if (S.lastDim === 'height' && $('outH').value) $('outW').value = out.width;
+    }
+    $('sizeHint').textContent = usingScale
+      ? `${S.scale}× — one SVG unit becomes ${S.scale} pixel${S.scale === 1 ? '' : 's'}.`
+      : out.mode === 'box' ? 'Fits inside the box; the rest is filled with the background.' : 'Aspect ratio follows the crop.';
+
+    $('paddingVal').textContent = fmt(S.padding);
+    $('mCanvas').textContent = fmt(cv.width) + ' × ' + fmt(cv.height);
+    $('mCrop').textContent = fmt(c.width) + ' × ' + fmt(c.height);
+    $('mExport').textContent = out.width + ' × ' + out.height + ' px';
+    $('canvasInfo').textContent = 'viewBox ' + [cv.x, cv.y, cv.width, cv.height].map(fmt).join(' ');
+
+    const png = $('format').value === 'png';
+    $('losslessField').hidden = png;
+    $('qualityField').hidden = png || $('lossless').checked;
+  }
+
+  function same(a, b) { return ['x', 'y', 'width', 'height'].every((k) => Math.abs(a[k] - b[k]) < 0.005); }
+
+  // --- crop interaction ------------------------------------------------------
+
+  let drag = null;
+
+  function startDrag(e, handle) {
+    if (!S.crop || e.button !== 0) return;
+    e.preventDefault(); e.stopPropagation();
+    drag = { handle, startX: e.clientX, startY: e.clientY, start: { ...S.crop }, target: e.currentTarget };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function moveDrag(e) {
+    if (!drag) return;
+    const rect = $('stage').getBoundingClientRect();
+    const dx = (e.clientX - drag.startX) * S.canvas.width / rect.width;
+    const dy = (e.clientY - drag.startY) * S.canvas.height / rect.height;
+    S.crop = resizeCrop(drag.start, drag.handle, dx, dy);
+    render();
+  }
+
+  function endDrag() { drag = null; }
+
+  $('cropbox').addEventListener('pointerdown', (e) => startDrag(e, 'move'));
+  document.querySelectorAll('.handle').forEach((h) => h.addEventListener('pointerdown', (e) => startDrag(e, h.dataset.h)));
+  window.addEventListener('pointermove', moveDrag);
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', endDrag);
+
+  $('cropbox').addEventListener('keydown', (e) => {
+    const step = e.shiftKey ? 10 : 1;
+    const d = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    S.crop = resizeCrop(S.crop, 'move', d[0], d[1]);
+    render();
+  });
+
+  for (const k of ['x', 'y', 'width', 'height']) {
+    $('c' + k[0]).addEventListener('input', (e) => {
+      const n = Number(e.target.value);
+      if (!Number.isFinite(n) || e.target.value === '') return;
+      const next = { ...S.crop, [k]: n };
+      if (S.lockRatio && (k === 'width' || k === 'height')) {
+        const ratio = S.crop.width / S.crop.height;
+        if (k === 'width') next.height = n / ratio; else next.width = n * ratio;
+      }
+      S.crop = clamp(next);
+      render();
+    });
+  }
+
+  $('lockRatio').addEventListener('change', (e) => { S.lockRatio = e.target.checked; });
+  $('presetArtwork').addEventListener('click', () => { if (S.artwork) { S.crop = clamp({ ...S.artwork }); render(); } });
+  $('presetCanvas').addEventListener('click', () => { S.crop = { ...S.canvas }; render(); });
+  $('padding').addEventListener('input', (e) => { S.padding = Number(e.target.value); render(); });
+
+  // --- output controls -------------------------------------------------------
+
+  document.querySelectorAll('[data-scale]').forEach((b) => b.addEventListener('click', () => {
+    S.scale = Number(b.dataset.scale);
+    $('outW').value = ''; $('outH').value = '';
+    render();
+  }));
+  $('outW').addEventListener('input', () => { S.lastDim = 'width'; if (!$('outW').value && S.sizeLock) $('outH').value = ''; render(); });
+  $('outH').addEventListener('input', () => { S.lastDim = 'height'; if (!$('outH').value && S.sizeLock) $('outW').value = ''; render(); });
+  $('sizeLock').addEventListener('click', () => {
+    S.sizeLock = !S.sizeLock;
+    $('sizeLock').classList.toggle('on', S.sizeLock);
+    $('sizeLock').setAttribute('aria-pressed', String(S.sizeLock));
+    render();
+  });
+  $('format').addEventListener('change', render);
+  $('lossless').addEventListener('change', render);
+  $('quality').addEventListener('input', () => { $('qualityVal').textContent = $('quality').value; });
+  $('background').addEventListener('change', () => { $('bgColor').hidden = $('background').value !== 'custom'; });
+
+  function backgroundValue() {
+    const v = $('background').value;
+    return v === 'custom' ? $('bgColor').value.toUpperCase() : v;
+  }
+
+  // --- source editing --------------------------------------------------------
+
+  let sourceTimer = null;
+  $('source').addEventListener('input', () => {
+    clearTimeout(sourceTimer);
+    sourceTimer = setTimeout(() => {
+      const text = $('source').value;
+      if (!/<svg[\s>]/i.test(text)) return;
+      S.svg = text;
+      clearResult();
+      updatePreview();
+      analyze();
+    }, 500);
+  });
+
+  // --- convert ---------------------------------------------------------------
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (!S.svg || !S.crop) return;
+    $('notes').innerHTML = '';
+    $('go').disabled = true; $('go').textContent = 'Converting…';
+    clearResult();
+
+    try {
+      const out = outputSize();
+      const body = {
+        svg: S.svg,
+        name: S.name.replace(/\.svg$/i, ''),
+        format: $('format').value,
+        quality: Number($('quality').value),
+        lossless: $('lossless').checked,
+        background: backgroundValue(),
+        crop: 'custom',
+        cropRect: S.crop,
+        padding: S.padding
+      };
+      if (out.mode === 'box') { body.width = out.width; body.height = out.height; }
+      else if (out.mode === 'width') body.width = out.width;
+      else if (out.mode === 'height') body.height = out.height;
+      else body.scale = S.scale;
+
+      const res = await api('/convert/svg', body);
+      const blob = await res.blob();
+      const width = res.headers.get('x-image-width'), height = res.headers.get('x-image-height');
+      const warning = res.headers.get('x-image-warning');
+      const filename = (res.headers.get('content-disposition') || '').match(/filename="([^"]+)"/)?.[1] || (body.name + '.' + body.format);
+
+      S.result = { blob, filename, url: URL.createObjectURL(blob) };
+      $('resultImg').src = S.result.url;
+      $('rDims').textContent = width + ' × ' + height;
+      $('rBytes').textContent = formatBytes(blob.size);
+      $('rFormat').textContent = body.format.toUpperCase() + (body.lossless && body.format === 'webp' ? ' lossless' : '');
+      $('result').hidden = false;
+      if (warning) warning.split(' | ').forEach((w) => note($('notes'), 'warn', escapeHtml(w)));
+    } catch (err) {
+      note($('notes'), 'err', err.message);
+    } finally {
+      $('go').disabled = false; $('go').textContent = 'Convert';
+    }
+  });
+
+  function clearResult() {
+    if (S.result?.url) URL.revokeObjectURL(S.result.url);
+    S.result = null;
+    $('result').hidden = true;
+    $('resultImg').removeAttribute('src');
+  }
+
+  $('download').addEventListener('click', () => { if (S.result) downloadBlob(S.result.blob, S.result.filename); });
+
+  // --- file intake -----------------------------------------------------------
+
+  function readFile(file) {
+    if (!file) return;
+    if (!(file.type === 'image/svg+xml' || /\.svg$/i.test(file.name))) return fail('Please choose an SVG file.');
+    if (file.size > MAX_FILE_BYTES) return fail('SVG is too large. The limit is 8 MB.');
+    file.text().then((text) => loadSvg(text, file.name));
+  }
+
+  $('drop').addEventListener('click', () => $('file').click());
+  $('drop').addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); $('file').click(); } });
+  $('file').addEventListener('change', (e) => { readFile(e.target.files[0]); e.target.value = ''; });
+
+  for (const target of [$('drop'), $('stageWrap')]) {
+    target.addEventListener('dragover', (e) => { e.preventDefault(); target.classList.add('over'); });
+    target.addEventListener('dragleave', () => target.classList.remove('over'));
+    target.addEventListener('drop', (e) => { e.preventDefault(); target.classList.remove('over'); readFile(e.dataTransfer.files[0]); });
+  }
+
+  document.addEventListener('paste', (e) => {
+    const tag = document.activeElement?.tagName;
+    if (tag === 'TEXTAREA' || tag === 'INPUT') return;
+    const file = [...(e.clipboardData?.files || [])].find((f) => f.type === 'image/svg+xml' || /\.svg$/i.test(f.name));
+    if (file) { e.preventDefault(); return readFile(file); }
+    const text = e.clipboardData?.getData('text/plain') || '';
+    if (/<svg[\s>]/i.test(text)) { e.preventDefault(); loadSvg(text, 'pasted.svg'); }
+  });
+
+  $('change').addEventListener('click', () => {
+    clearResult();
+    $('editor').hidden = true;
+    $('drop').hidden = false;
+    $('notes').innerHTML = '';
+    if (S.previewUrl) { URL.revokeObjectURL(S.previewUrl); S.previewUrl = ''; }
+    S.svg = ''; S.crop = null; S.canvas = null; S.artwork = null;
+  });
+
+  window.addEventListener('resize', render);
+
+  qrgenUI.initToken();
+})();
+</script>
+</body>
+</html>

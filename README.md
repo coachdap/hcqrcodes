@@ -1,13 +1,14 @@
 # qrgen
 
 Print-ready and web-ready QR code generation for Hoops College and Chase Excellence —
-flyers, gym signage, jersey tags, registration links, WiFi access and vCards.
+flyers, gym signage, jersey tags, registration links, WiFi access and vCards — plus a
+utilities page with a crop-accurate SVG → WebP/PNG converter.
 
 One generator, three ways in: HTTP (n8n, Hyperframes), a local CLI, and an importable
 JS client. All generation happens locally — no external API calls, no telemetry, no
 redirect domains.
 
-- Node 22 · Express · `qrcode` · `sharp` · `zod` · `archiver`
+- Node 22 · Express · `qrcode` · `sharp` · `@resvg/resvg-js` · `zod` · `archiver`
 - Deployed on **hc-new** as a container on the `hc-internal` Docker network,
   published to `127.0.0.1:3020` and reverse-proxied by Apache at
   `https://qr.hoopscollege.com`
@@ -129,6 +130,49 @@ curl -X POST http://qrgen:3000/generate/batch \
 Rendering happens fully before the zip streams, so one bad item fails the request
 cleanly instead of producing a half-written archive.
 
+### `POST /convert/svg` — SVG → WebP/PNG (utilities)
+
+Rasterises an SVG with a vector-accurate crop. The markup travels as a JSON string,
+so the same guard chain (flood check, token, body limit) applies.
+
+| Field | Type | Default | Notes |
+| --- | --- | --- | --- |
+| `svg` | string | — | **required**; the SVG markup |
+| `format` | `webp` \| `png` | `webp` | |
+| `crop` | `artwork` \| `original` \| `custom` | `artwork` | `artwork` = visible bounds incl. strokes, clipped to the canvas |
+| `cropRect` | `{x,y,width,height}` | — | required with `custom`; in the SVG's **user units** (viewBox space) |
+| `padding` | number ≥ 0 | `0` | extra room around the crop, user units |
+| `scale` | 0.01–64 | `1` | pixels per user unit, used when neither `width` nor `height` is set |
+| `width`, `height` | int 1–8192 | — | one keeps the aspect ratio; both fit inside and letterbox with `background` |
+| `quality` | int 1–100 | `90` | WebP only |
+| `lossless` | bool | `false` | WebP only |
+| `background` | `transparent` \| hex | `transparent` | |
+| `name` | string | `image` | filename stem for `Content-Disposition` |
+
+Response headers: `X-Image-Width`, `X-Image-Height`, and `X-Image-Warning` when a
+fallback or adjustment happened. Output is capped at 8192 px per edge and 40 MP
+(`OUTPUT_TOO_LARGE`).
+
+```bash
+curl -X POST http://qrgen:3000/convert/svg \
+  -H 'Content-Type: application/json' \
+  -d "$(jq -n --rawfile svg logo.svg '{svg:$svg, crop:"artwork", padding:8, width:1200, background:"#FFFFFF"}')" \
+  -o logo.webp
+```
+
+The crop is applied by rewriting the root `viewBox` **before** rasterising, so the
+editor in the UI, the bounds from `/analyze` and the exported pixels share one
+coordinate system. Physical units (`mm`, `in`, `%`) are normalised to "one user unit =
+one pixel at scale 1". Scripts, `<foreignObject>` and external `href`/`url()` resources
+are refused (`UNSAFE_SVG`); inline them as `data:` URIs. Plain `<a href>` links are fine.
+
+### `POST /convert/svg/analyze`
+
+`{ svg }` → `{ width, height, canvas, bbox, hasText }`. `canvas` is the viewBox (or
+`0 0 w h` without one) and `bbox` the visible artwork's bounds, stroke included, both in
+user units. `hasText` flags live `<text>`, which renders with the container's fonts
+(Liberation + DejaVu) — convert type to outlines in the source for an exact match.
+
 ### `GET /health`
 
 Open, no token. `{"status":"ok","service":"qrgen","uptime":123}`.
@@ -148,6 +192,20 @@ can protect the page by path prefix without also covering the API routes.
 From outside `hc-internal` the page asks for the bearer token once and keeps it in that
 browser's `localStorage`. Loading the page is not gated; generating is.
 
+### `GET /ui/utilities` — SVG → WebP
+
+The utilities page, reached from the tool switcher in the masthead. Drop, choose or
+paste an SVG; the artwork bounds are detected and shown as a draggable crop box (eight
+handles, drag to move, arrow keys to nudge, optional locked ratio, exact X/Y/W/H
+fields, padding). Pick WebP or PNG, a scale preset or explicit pixel size, quality or
+lossless, and a background, then convert and download. The source is editable in
+place — edits re-analyse the artwork and are what gets exported. The preview is the
+SVG with its root viewport normalised exactly as the server does it, so the crop you
+see is the crop you get, including offset viewBoxes and `mm` documents.
+
+Shared styles and token handling live in `public/shared.css` and `public/shared.js`,
+served under `/ui/` so the same Cloudflare Access path prefix covers them.
+
 ### `GET /auth`
 
 Reports whether the caller needs a token: `{"scope":"external","tokenRequired":true}`.
@@ -166,6 +224,9 @@ Lets the UI decide whether to show its token field without spending a generate c
 | `BODY_TOO_LARGE` | 413 | request body exceeds `QRGEN_BODY_LIMIT` |
 | `RATE_LIMITED` | 429 | see `Retry-After` |
 | `AUTH_NOT_CONFIGURED` | 503 | `QRGEN_TOKEN` unset, so external callers cannot be authenticated |
+| `INVALID_SVG` / `UNSAFE_SVG` | 400 | `/convert/svg`: no `<svg>` root, or scripts / external resources present |
+| `OUTPUT_TOO_LARGE` | 400 | `/convert/svg`: requested raster exceeds 8192 px per edge or 40 MP |
+| `RENDER_FAILED` | 422 | `/convert/svg`: neither resvg nor librsvg could rasterise the document |
 
 ---
 
@@ -288,9 +349,11 @@ QRGEN_TOKEN=<token>
 ```
 
 Methods: `svg()`, `png()`, `svgDataUri()`, `generate()`, `wifi()`, `vcard()`, `batch()`,
-`health()`. `generate()`/`wifi()`/`vcard()` return `{ data, version, ecLevel, warnings }`;
-`svg()` returns markup, `png()`/`batch()` return a `Uint8Array`. Override the config
-explicitly if you prefer: `createClient({ baseUrl, token, timeoutMs })`.
+`convertSvg()`, `health()`. `generate()`/`wifi()`/`vcard()` return
+`{ data, version, ecLevel, warnings }`; `svg()` returns markup, `png()`/`batch()` return a
+`Uint8Array`; `convertSvg({ svg, ...options })` returns `{ data, width, height, warnings }`
+with `data` a `Uint8Array`. Override the config explicitly if you prefer:
+`createClient({ baseUrl, token, timeoutMs })`.
 
 ---
 
@@ -392,9 +455,16 @@ See `.env.example` for the annotated list. Summary:
 ```bash
 npm test                                        # local, writes ./output
 docker compose exec qrgen node test/generate-all.js   # container, writes /output volume
+docker compose exec qrgen node test/convert-svg.js    # the SVG → WebP utility
 ```
 
-Generates one of every output type — plain SVG, plain PNG, SVG with a vector logo, SVG
-with a raster logo, PNG with a logo, WiFi, vCard and a batch zip — then prints the file
-sizes, QR versions and EC levels, flags whether each SVG stayed pure vector, and checks
-that an over-capacity payload is rejected.
+`generate-all.js` generates one of every output type — plain SVG, plain PNG, SVG with a
+vector logo, SVG with a raster logo, PNG with a logo, WiFi, vCard and a batch zip — then
+prints the file sizes, QR versions and EC levels, flags whether each SVG stayed pure
+vector, and checks that an over-capacity payload is rejected.
+
+`convert-svg.js` (also `npm run test:convert`) pushes the HC logo and two synthetic
+documents through every conversion path — artwork crop, custom crop with padding, fixed
+width, fixed box with letterbox, PNG, lossless, `mm` units with an offset viewBox — and
+asserts the pixel sizes, the stroke-inclusive bounds, and that unsafe or oversized
+requests are refused.
