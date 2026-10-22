@@ -32,8 +32,9 @@ export function registerToolRoutes(app, { pre, auth, post, json }) {
     }
   };
 
-  // Option lists the pages render, so the UI and server never drift apart.
-  app.get('/tools/meta', guard, (req, res) => {
+  // Option lists the pages render, so the UI and server never drift apart. No
+  // secrets here, so no token: pages need it before the visitor has saved one.
+  app.get('/tools/meta', pre, (req, res) => {
     res.json({
       socialPresets: SOCIAL_PRESETS,
       flyerSizes: Object.fromEntries(Object.entries(FLYER_SIZES).map(([k, v]) => [k, v.label])),

@@ -16,7 +16,7 @@
   },
   "scripts": {
     "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
+    "dev": "node --watch-path=src --watch-path=public src/server.js",
     "test": "node test/generate-all.js && node test/convert-svg.js && node test/tools.js",
     "test:convert": "node test/convert-svg.js",
     "test:tools": "node test/tools.js"

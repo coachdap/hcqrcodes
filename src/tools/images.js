@@ -354,5 +354,6 @@ export async function renderLogo(buffer, { isSvgFile, size, format = 'png', back
   const file = { buffer, originalname: isSvgFile ? 'logo.svg' : 'logo.png', mimetype: isSvgFile ? 'image/svg+xml' : 'image/png' };
   const { image } = await open(file, { targetEdge: size });
   const pipeline = image.resize(size, size, { fit: 'inside', withoutEnlargement: !isSvgFile });
-  return encode(pipeline, format, { quality: 92, background }).toBuffer();
+  // Lossless PNG: palette quantisation would band gradients in logos.
+  return encode(pipeline, format, { quality: 92, lossless: format === 'png', background }).toBuffer();
 }
