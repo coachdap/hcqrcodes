@@ -16,8 +16,9 @@ qr.hoopscollege.com {
 		}
 	}
 
+	# Matches LimitRequestBody in the Apache vhost: video uploads up to 95 MB.
 	request_body {
-		max_size 20MB
+		max_size 100MB
 	}
 
 	log {

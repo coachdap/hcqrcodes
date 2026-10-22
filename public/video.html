@@ -1,0 +1,364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Video tools · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .drop.big { min-height: 260px; }
+  .player { width: 100%; max-height: 420px; border-radius: 8px; background: #000; display: block; }
+  .vhead { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; min-width: 0; }
+  .vhead .name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; flex: 1; }
+  .ops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 16px; }
+  .op { display: flex; flex-direction: column; align-items: flex-start; gap: 3px; text-align: left; padding: 12px; border-radius: 9px; background: var(--bg); color: var(--text); border: 1px solid var(--line); font-weight: 600; line-height: 1.25; }
+  .op small { font-weight: 500; color: var(--muted); font-size: 12px; }
+  .op:hover { filter: none; border-color: var(--accent); }
+  .op.on { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: var(--soft); }
+  .timefield { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .timefield button { padding: 0 10px; font-size: 12.5px; }
+  .stage-label { display: flex; justify-content: space-between; font-size: 13px; margin: 14px 0 6px; }
+  .stage-label b { font-variant-numeric: tabular-nums; }
+  .out { margin-top: 16px; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; }
+  .out .media { display: grid; place-items: center; padding: 12px; background: var(--soft); }
+  .out .media img, .out .media video { max-width: 100%; max-height: 360px; display: block; border-radius: 4px; }
+  .out .media audio { width: 100%; }
+  .out .bar { display: flex; align-items: center; gap: 12px; padding: 10px 12px; font-size: 13px; flex-wrap: wrap; }
+  .out .bar .grow { flex: 1; min-width: 140px; overflow-wrap: anywhere; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="video">
+  <header class="page">
+    <div>
+      <h1>Video tools</h1>
+      <div class="sub">Shrink highlight clips so they send and upload fast, make GIFs, grab thumbnails or pull the audio. Your video is processed on our server and deleted within 30 minutes.</div>
+    </div>
+  </header>
+
+  <div class="drop big" id="drop"></div>
+
+  <div class="grid" id="editor" hidden>
+    <div class="panel">
+      <div class="vhead">
+        <span class="name" id="vName"></span>
+        <button type="button" class="ghost small" id="change">Change video</button>
+      </div>
+      <video class="player" id="player" controls playsinline preload="metadata"></video>
+      <div class="meta" id="vMeta"></div>
+    </div>
+
+    <div class="panel">
+      <div class="section">What do you want to do?</div>
+      <div class="ops" role="radiogroup" aria-label="Operation">
+        <button type="button" class="op on" data-op="compress" role="radio" aria-checked="true">Compress for sharing<small>Smaller MP4 for text, email, Instagram</small></button>
+        <button type="button" class="op" data-op="gif" role="radio" aria-checked="false">Make a GIF<small>Short looping clip, up to 20 s</small></button>
+        <button type="button" class="op" data-op="frames" role="radio" aria-checked="false">Grab thumbnails<small>Still frames as JPG</small></button>
+        <button type="button" class="op" data-op="mp3" role="radio" aria-checked="false">Extract audio<small>Save the sound as MP3</small></button>
+      </div>
+
+      <!-- trim (compress, gif, mp3; frames uses it for even spacing) -->
+      <div id="trim">
+        <div class="row">
+          <div class="field">
+            <label for="start">Start at</label>
+            <div class="timefield"><input type="text" id="start" placeholder="0:00" inputmode="decimal" autocomplete="off"><button type="button" class="ghost" data-now="start" title="Use the player's current time">Now</button></div>
+          </div>
+          <div class="field" id="endField">
+            <label for="end">End at</label>
+            <div class="timefield"><input type="text" id="end" placeholder="end" inputmode="decimal" autocomplete="off"><button type="button" class="ghost" data-now="end" title="Use the player's current time">Now</button></div>
+          </div>
+          <div class="field" id="lengthField" hidden>
+            <label for="length">Length (seconds)</label>
+            <input type="number" id="length" value="5" min="1" max="20" step="0.5">
+          </div>
+        </div>
+        <div class="hint" style="margin:-6px 0 14px">Times as seconds or m:ss. Pause the player where you want and press <b>Now</b>.</div>
+      </div>
+
+      <div data-opts="compress">
+        <div class="field">
+          <label>Quality</label>
+          <div class="seg full" role="group" aria-label="Quality">
+            <button type="button" data-quality="small">Smallest</button>
+            <button type="button" class="on" data-quality="balanced">Balanced</button>
+            <button type="button" data-quality="high">High</button>
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="maxHeight">Max size</label>
+            <select id="maxHeight"><option value="480">480p (texting)</option><option value="720" selected>720p (social, email)</option><option value="1080">1080p (full HD)</option><option value="0">Keep original</option></select>
+          </div>
+          <div class="field" style="align-self:end"><label class="toggle"><input type="checkbox" id="mute"> Remove sound</label></div>
+        </div>
+      </div>
+
+      <div data-opts="gif" hidden>
+        <div class="row">
+          <div class="field">
+            <label for="gifWidth">Width</label>
+            <select id="gifWidth"><option value="320">320 px (smallest)</option><option value="480" selected>480 px</option><option value="640">640 px</option><option value="800">800 px</option></select>
+          </div>
+          <div class="field">
+            <label for="fps">Smoothness</label>
+            <select id="fps"><option value="8">8 fps</option><option value="10">10 fps</option><option value="12" selected>12 fps</option><option value="15">15 fps</option><option value="20">20 fps</option></select>
+          </div>
+        </div>
+        <div class="hint" style="margin:-6px 0 14px">GIFs get big fast. Keep them short and narrow, or use a compressed MP4 instead.</div>
+      </div>
+
+      <div data-opts="frames" hidden>
+        <div class="field">
+          <div class="seg full" role="group" aria-label="Frame selection">
+            <button type="button" class="on" data-frames="even">Evenly spaced</button>
+            <button type="button" data-frames="times">At set times</button>
+          </div>
+        </div>
+        <div class="field" id="countField">
+          <label for="count">How many</label>
+          <select id="count"><option>1</option><option>3</option><option selected>6</option><option>9</option><option>12</option><option>24</option></select>
+        </div>
+        <div class="field" id="timesField" hidden>
+          <label for="times">Times</label>
+          <div class="timefield"><input type="text" id="times" placeholder="0:05, 0:12, 1:03" autocomplete="off"><button type="button" class="ghost" id="addTime">+ Now</button></div>
+          <div class="hint">Separate times with commas. <b>+ Now</b> adds the player's current time.</div>
+        </div>
+      </div>
+
+      <div data-opts="mp3" hidden>
+        <p class="hint" style="margin-top:0">Saves the audio track as a high-quality MP3.</p>
+      </div>
+
+      <div class="actions"><button type="button" id="go">Start</button></div>
+
+      <div id="progress" hidden>
+        <div class="stage-label"><span id="stage">Uploading…</span><b id="pct">0%</b></div>
+        <div class="progress" id="bar"><i></i></div>
+      </div>
+      <div id="result"></div>
+      <div id="notes"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, request, getJson, uploadWithProgress, dropzone, dropMarkup, note, formatBytes, downloadBlob, escapeHtml, toast } = qrgenUI;
+
+  let limitMB = 95;
+  let file = null;
+  let op = 'compress';
+  let quality = 'balanced';
+  let framesMode = 'even';
+  let previewUrl = '';
+  let resultUrl = '';
+  let polling = null;
+
+  $('drop').innerHTML = dropMarkup('Drop a video here', `MP4, MOV, WebM… up to ${limitMB} MB and 10 minutes. Or click to choose.`);
+  getJson('/tools/meta').then((m) => {
+    limitMB = m.limits.videoMB;
+    $('drop').querySelector('span').textContent = `MP4, MOV, WebM… up to ${limitMB} MB and 10 minutes. Or click to choose.`;
+  }).catch(() => {});
+
+  // --- time helpers ---------------------------------------------------------
+  function parseTime(v) {
+    v = String(v || '').trim();
+    if (!v) return null;
+    const parts = v.split(':').map(Number);
+    if (parts.some((n) => !Number.isFinite(n) || n < 0)) return NaN;
+    return parts.reduce((a, n) => a * 60 + n, 0);
+  }
+  function fmtTime(t) {
+    const m = Math.floor(t / 60);
+    const s = t - m * 60;
+    return `${m}:${s.toFixed(1).padStart(4, '0')}`.replace(/\.0$/, '');
+  }
+
+  // --- loading --------------------------------------------------------------
+  function load(f) {
+    if (f.size > limitMB * 1024 * 1024) {
+      toast(`That video is ${formatBytes(f.size)}. The limit is ${limitMB} MB.`);
+      return;
+    }
+    file = f;
+    if (previewUrl) URL.revokeObjectURL(previewUrl);
+    previewUrl = URL.createObjectURL(f);
+    $('player').src = previewUrl;
+    $('vName').textContent = f.name;
+    $('vMeta').innerHTML = `<span>Size <b>${formatBytes(f.size)}</b></span>`;
+    $('drop').hidden = true;
+    $('editor').hidden = false;
+    clearResult();
+  }
+  $('player').addEventListener('loadedmetadata', () => {
+    const v = $('player');
+    $('vMeta').innerHTML = `<span>Size <b>${formatBytes(file.size)}</b></span>` +
+      (Number.isFinite(v.duration) ? `<span>Length <b>${fmtTime(v.duration)}</b></span>` : '') +
+      (v.videoWidth ? `<span>Resolution <b>${v.videoWidth}×${v.videoHeight}</b></span>` : '');
+  });
+  $('player').addEventListener('error', () => {
+    $('vMeta').innerHTML += '<span>This browser can\'t preview this format, but it can still be processed.</span>';
+  });
+
+  dropzone($('drop'), { accept: 'video/*,.mov,.mkv,.avi,.m4v,.webm,.mp4', onFiles: ([f]) => load(f) });
+  $('change').addEventListener('click', () => {
+    stopPolling();
+    $('player').removeAttribute('src');
+    $('player').load();
+    file = null;
+    $('editor').hidden = true;
+    $('drop').hidden = false;
+  });
+
+  // --- options ---------------------------------------------------------------
+  function selectOp(next) {
+    op = next;
+    document.querySelectorAll('[data-op]').forEach((b) => { b.classList.toggle('on', b.dataset.op === op); b.setAttribute('aria-checked', String(b.dataset.op === op)); });
+    document.querySelectorAll('[data-opts]').forEach((p) => { p.hidden = p.dataset.opts !== op; });
+    $('endField').hidden = op === 'gif';
+    $('lengthField').hidden = op !== 'gif';
+    $('trim').hidden = op === 'frames' && framesMode === 'times';
+    $('go').textContent = { compress: 'Compress video', gif: 'Make GIF', frames: 'Grab frames', mp3: 'Extract MP3' }[op];
+  }
+  document.querySelectorAll('[data-op]').forEach((b) => b.addEventListener('click', () => selectOp(b.dataset.op)));
+  document.querySelectorAll('[data-quality]').forEach((b) => b.addEventListener('click', () => {
+    quality = b.dataset.quality;
+    document.querySelectorAll('[data-quality]').forEach((x) => x.classList.toggle('on', x === b));
+  }));
+  document.querySelectorAll('[data-frames]').forEach((b) => b.addEventListener('click', () => {
+    framesMode = b.dataset.frames;
+    document.querySelectorAll('[data-frames]').forEach((x) => x.classList.toggle('on', x === b));
+    $('countField').hidden = framesMode !== 'even';
+    $('timesField').hidden = framesMode !== 'times';
+    $('trim').hidden = framesMode === 'times';
+  }));
+  document.querySelectorAll('[data-now]').forEach((b) => b.addEventListener('click', () => {
+    $(b.dataset.now).value = fmtTime($('player').currentTime || 0);
+  }));
+  $('addTime').addEventListener('click', () => {
+    const t = fmtTime($('player').currentTime || 0);
+    $('times').value = $('times').value.trim() ? `${$('times').value.trim().replace(/,\s*$/, '')}, ${t}` : t;
+  });
+  selectOp('compress');
+
+  // --- run ----------------------------------------------------------------------
+  function setProgress(stage, fraction, indeterminate = false) {
+    $('progress').hidden = false;
+    $('stage').textContent = stage;
+    $('pct').textContent = indeterminate ? '' : Math.round(fraction * 100) + '%';
+    $('bar').classList.toggle('indeterminate', indeterminate);
+    $('bar').firstElementChild.style.width = indeterminate ? '' : (fraction * 100).toFixed(1) + '%';
+  }
+
+  function clearResult() {
+    if (resultUrl) URL.revokeObjectURL(resultUrl);
+    resultUrl = '';
+    $('result').innerHTML = '';
+    $('notes').innerHTML = '';
+    $('progress').hidden = true;
+  }
+
+  function stopPolling() { if (polling) clearTimeout(polling); polling = null; }
+
+  function buildForm() {
+    const form = new FormData();
+    form.append('files', file);
+    form.append('op', op);
+    const start = parseTime($('start').value);
+    const end = parseTime($('end').value);
+    if (Number.isNaN(start) || Number.isNaN(end)) throw new Error('Times must be seconds (75) or minutes:seconds (1:15).');
+    if (start !== null) form.append('start', String(start));
+    if (op === 'gif') {
+      const len = Math.min(20, Math.max(0.5, Number($('length').value) || 5));
+      form.append('end', String((start || 0) + len));
+      form.append('width', $('gifWidth').value);
+      form.append('fps', $('fps').value);
+    } else if (end !== null) {
+      if (end <= (start || 0)) throw new Error('The end time must be after the start time.');
+      form.append('end', String(end));
+    }
+    if (op === 'compress') {
+      form.append('quality', quality);
+      form.append('maxHeight', $('maxHeight').value);
+      form.append('mute', String($('mute').checked));
+    }
+    if (op === 'frames') {
+      if (framesMode === 'times') {
+        const list = $('times').value.split(/[,\s]+/).filter(Boolean);
+        if (!list.length) throw new Error('Enter at least one time, or press + Now.');
+        if (list.some((t) => Number.isNaN(parseTime(t)))) throw new Error('One of those times is not valid. Use seconds or m:ss.');
+        form.append('times', list.join(','));
+      } else form.append('count', $('count').value);
+    }
+    return form;
+  }
+
+  $('go').addEventListener('click', async () => {
+    if (!file) return;
+    stopPolling();
+    clearResult();
+    let form;
+    try { form = buildForm(); } catch (err) { note($('notes'), 'err', escapeHtml(err.message)); return; }
+    $('go').disabled = true;
+    try {
+      setProgress('Uploading…', 0);
+      const job = await uploadWithProgress('/video/jobs', form, (f) => setProgress(f < 1 ? 'Uploading…' : 'Starting…', f));
+      await follow(job.id);
+    } catch (err) {
+      $('progress').hidden = true;
+      note($('notes'), 'err', err.message);
+    } finally {
+      $('go').disabled = false;
+    }
+  });
+
+  function follow(id) {
+    return new Promise((resolve, reject) => {
+      const tick = async () => {
+        let job;
+        try {
+          job = await getJson('/video/jobs/' + id);
+        } catch (err) {
+          return reject(err);
+        }
+        if (job.status === 'queued') setProgress('Waiting for another video to finish…', 0, true);
+        if (job.status === 'running') setProgress('Processing…', job.progress || 0, !job.progress);
+        if (job.status === 'error') return reject(new Error(escapeHtml(job.error || 'Processing failed.')));
+        if (job.status === 'done') {
+          setProgress('Downloading result…', 1);
+          try { await showResult(job); resolve(); } catch (err) { reject(err); }
+          return;
+        }
+        polling = setTimeout(tick, 1000);
+      };
+      tick();
+    });
+  }
+
+  async function showResult(job) {
+    const res = await request(`/video/jobs/${job.id}/download`);
+    const blob = await res.blob();
+    $('progress').hidden = true;
+    resultUrl = URL.createObjectURL(blob);
+    const type = blob.type || '';
+    let media = '';
+    if (type.startsWith('video/')) media = `<video src="${resultUrl}" controls playsinline></video>`;
+    else if (type.startsWith('image/')) media = `<img src="${resultUrl}" alt="Result">`;
+    else if (type.startsWith('audio/')) media = `<audio src="${resultUrl}" controls></audio>`;
+    const before = job.source.bytes;
+    const compare = job.op === 'compress' && before
+      ? ` · <b>${blob.size < before ? Math.round((1 - blob.size / before) * 100) + '% smaller' : 'no smaller'}</b> (${formatBytes(before)} → ${formatBytes(blob.size)})`
+      : ` · ${formatBytes(blob.size)}`;
+    $('result').innerHTML = `<div class="out">${media ? `<div class="media">${media}</div>` : ''}
+      <div class="bar"><span class="grow"><b>${escapeHtml(job.filename)}</b>${compare}</span><button type="button" class="small" id="dl">Download</button></div></div>`;
+    $('dl').addEventListener('click', () => downloadBlob(blob, job.filename));
+    if (job.op === 'compress' && blob.size >= before) {
+      note($('notes'), 'warn', 'This video was already well compressed. Try <b>Smallest</b> or a lower max size.');
+    }
+  }
+})();
+</script>
+</body>
+</html>

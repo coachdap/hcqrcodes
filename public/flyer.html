@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flyer maker · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .preview-frame { position: relative; min-height: 360px; }
+  .preview-frame img { max-height: 70vh; }
+  .preview-frame .spinner {
+    position: absolute; top: 12px; right: 12px; padding: 5px 10px; border-radius: 999px;
+    background: var(--panel); border: 1px solid var(--line); font-size: 12px; font-weight: 600; color: var(--muted);
+  }
+  .preview-frame.loading img { opacity: .55; transition: opacity .2s; }
+  .colors { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .filepick { display: flex; align-items: center; gap: 10px; padding: 9px 11px; border: 1px dashed var(--line); border-radius: 8px; background: var(--bg); cursor: pointer; font-size: 13.5px; min-height: 44px; }
+  .filepick:hover, .filepick.over { border-color: var(--accent); }
+  .filepick img { width: 36px; height: 36px; object-fit: cover; border-radius: 5px; flex: none; }
+  .filepick .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .filepick .label b { color: var(--text); font-weight: 600; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="flyer">
+  <header class="page">
+    <div>
+      <h1>Flyer maker</h1>
+      <div class="sub">Fill in the details and the flyer updates as you type. Download a print-ready PDF or a PNG for social media and screens.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <form class="panel" id="form" autocomplete="off">
+      <div class="section">Look</div>
+      <div class="row">
+        <div class="field">
+          <label for="brand">Brand</label>
+          <select id="brand"><option value="hoops-college">Hoops College</option></select>
+        </div>
+        <div class="field">
+          <label for="size">Size</label>
+          <select id="size"><option value="letter">Letter 8.5×11 in</option></select>
+        </div>
+      </div>
+      <div class="field">
+        <label>Style</label>
+        <div class="seg full" role="group" aria-label="Style">
+          <button type="button" data-template="bold" class="on">Bold</button>
+          <button type="button" data-template="photo">Photo</button>
+          <button type="button" data-template="clean">Clean</button>
+        </div>
+        <div class="hint" id="templateHint">Solid brand colour behind a big headline.</div>
+      </div>
+      <div class="field" id="photoField" hidden>
+        <label>Photo</label>
+        <div class="filepick" id="photoPick"><span class="label"><b>Choose a photo</b>: action shots work best</span></div>
+        <div class="actions" id="photoActions" hidden><button type="button" class="ghost small" id="photoClear">Remove photo</button></div>
+      </div>
+
+      <hr>
+      <div class="section">Words</div>
+      <div class="field">
+        <label for="headline">Headline</label>
+        <input type="text" id="headline" maxlength="140" value="Fall Tryouts">
+      </div>
+      <div class="field">
+        <label for="subheadline">Subheadline</label>
+        <input type="text" id="subheadline" maxlength="200" value="Grades 6–12 · Boys &amp; Girls">
+      </div>
+      <div class="row">
+        <div class="field"><label for="date">Date</label><input type="text" id="date" maxlength="80" value="Saturday, Sept 14"></div>
+        <div class="field"><label for="time">Time</label><input type="text" id="time" maxlength="80" value="9am – 12pm"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="location">Location</label><input type="text" id="location" maxlength="160" value="Hoops College Gym"></div>
+        <div class="field"><label for="price">Price</label><input type="text" id="price" maxlength="80" value="$25"></div>
+      </div>
+      <div class="field">
+        <label for="details">Details</label>
+        <textarea id="details" rows="4" maxlength="1200">Bring water and court shoes
+Evaluations by Hoops College coaches
+All skill levels welcome</textarea>
+        <div class="hint">One point per line. They become bullet points.</div>
+      </div>
+
+      <hr>
+      <div class="section">QR code</div>
+      <div class="field">
+        <label for="url">Registration link</label>
+        <input type="url" id="url" maxlength="1200" value="https://hoopscollege.com/tryouts" placeholder="https://…">
+        <div class="hint">Leave empty for a flyer without a QR code. Use the <a href="/ui/links">Link builder</a> to track which flyers get scanned.</div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="cta">Text above the QR</label><input type="text" id="cta" maxlength="60" value="Scan to register"></div>
+        <div class="field"><label for="urlLabel">Printed link</label><input type="text" id="urlLabel" maxlength="120" placeholder="auto: the link without https://"></div>
+      </div>
+
+      <details>
+        <summary>Colours, logo and footer</summary>
+        <div class="colors">
+          <div class="field"><label for="primary">Main colour</label><input type="color" id="primary" value="#0B1F3A"></div>
+          <div class="field"><label for="accent">Accent colour</label><input type="color" id="accent" value="#0B1F3A"></div>
+        </div>
+        <div class="field"><button type="button" class="ghost small" id="resetColors">Use the brand's colours</button></div>
+        <div class="field">
+          <label for="website">Footer text</label>
+          <input type="text" id="website" maxlength="120" placeholder="auto: the brand's website">
+        </div>
+        <div class="field">
+          <label>Logo</label>
+          <div class="filepick" id="logoPick"><span class="label"><b>Use a different logo</b>: otherwise the brand kit logo</span></div>
+          <div class="actions" style="margin-top:8px">
+            <label class="toggle"><input type="checkbox" id="showLogo" checked> Show logo</label>
+            <button type="button" class="ghost small" id="logoClear" hidden>Back to brand logo</button>
+          </div>
+        </div>
+      </details>
+    </form>
+
+    <div class="panel sticky">
+      <div class="preview-frame checker" id="frame">
+        <div class="placeholder" id="placeholder">Preparing preview…</div>
+        <img id="previewImg" alt="Flyer preview" hidden>
+        <span class="spinner" id="spinner" hidden>Updating…</span>
+      </div>
+      <div class="actions" style="margin-top:14px">
+        <button type="button" id="dlPdf">Download PDF (print)</button>
+        <button type="button" class="ghost" id="dlPng">Download PNG</button>
+      </div>
+      <div class="hint" id="sizeNote"></div>
+      <div id="notes"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, upload, getJson, note, toast, busy, debounce, dropzone, downloadBlob, filenameFrom, escapeHtml } = qrgenUI;
+  const DRAFT_KEY = 'qrgen.flyer.draft';
+  const TEXT_FIELDS = ['headline', 'subheadline', 'date', 'time', 'location', 'price', 'details', 'url', 'cta', 'urlLabel', 'website', 'size', 'brand', 'primary', 'accent'];
+  const TEMPLATE_HINTS = {
+    bold: 'Solid brand colour behind a big headline.',
+    photo: 'Your photo behind the headline, darkened so the words stay readable.',
+    clean: 'White background with a coloured edge. Uses less ink.'
+  };
+
+  const S = { template: 'bold', brands: [], photo: null, photoPreview: null, logo: null, seq: 0, previewUrl: null };
+
+  // --- brands & sizes ----------------------------------------------------------
+
+  function brandColors(id) {
+    const b = S.brands.find((x) => x.id === id);
+    const hexes = (b?.colors || []).map((c) => c.hex.toUpperCase()).filter((h) => !/^#F[0-9A-F]F[0-9A-F]F[0-9A-F]$/.test(h));
+    return { primary: hexes[0] || '#0B1F3A', accent: hexes[1] || hexes[0] || '#0B1F3A' };
+  }
+
+  function applyBrandColors() {
+    const c = brandColors($('brand').value);
+    $('primary').value = c.primary;
+    $('accent').value = c.accent;
+  }
+
+  async function loadOptions() {
+    try {
+      const [meta, brand] = await Promise.all([getJson('/tools/meta'), getJson('/brand')]);
+      $('size').innerHTML = Object.entries(meta.flyerSizes).map(([k, v]) => `<option value="${k}">${escapeHtml(v)}</option>`).join('');
+      S.brands = brand.brands;
+      $('brand').innerHTML = S.brands.map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.name)}</option>`).join('');
+      applyBrandColors();
+    } catch (err) {
+      note($('notes'), 'err', err.message);
+    }
+  }
+
+  // --- draft persistence (text only; photos are not kept) ----------------------------
+
+  function saveDraft() {
+    try {
+      const d = { template: S.template };
+      TEXT_FIELDS.forEach((k) => { d[k] = $(k).value; });
+      d.showLogo = $('showLogo').checked;
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(d));
+    } catch (_) { /* storage unavailable */ }
+  }
+
+  function restoreDraft() {
+    let d = null;
+    try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (_) { d = null; }
+    if (!d) return;
+    TEXT_FIELDS.forEach((k) => {
+      if (typeof d[k] !== 'string') return;
+      const el = $(k);
+      if (el.tagName === 'SELECT' && ![...el.options].some((o) => o.value === d[k])) return;
+      el.value = d[k];
+    });
+    if (typeof d.showLogo === 'boolean') $('showLogo').checked = d.showLogo;
+    if (d.template) setTemplate(d.template, false);
+  }
+
+  // --- template ---------------------------------------------------------------------
+
+  function setTemplate(t, refresh = true) {
+    S.template = t;
+    document.querySelectorAll('[data-template]').forEach((b) => b.classList.toggle('on', b.dataset.template === t));
+    $('templateHint').textContent = TEMPLATE_HINTS[t];
+    $('photoField').hidden = t !== 'photo';
+    if (refresh) schedule();
+  }
+  document.querySelectorAll('[data-template]').forEach((b) => b.addEventListener('click', () => setTemplate(b.dataset.template)));
+
+  // --- photo & logo -----------------------------------------------------------------
+
+  /** Downscale on the phone/laptop before upload: a 12 MP photo becomes ~500 KB. */
+  async function shrink(file, maxEdge, quality = 0.86) {
+    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' }).catch(() => null);
+    if (!bitmap) throw new Error('That image could not be read. Try a JPG or PNG.');
+    const s = Math.min(1, maxEdge / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(bitmap.width * s);
+    canvas.height = Math.round(bitmap.height * s);
+    canvas.getContext('2d').drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  }
+
+  function showPick(el, file, blob, emptyHtml) {
+    if (!file) { el.innerHTML = `<span class="label">${emptyHtml}</span>`; return; }
+    const url = URL.createObjectURL(blob || file);
+    el.innerHTML = `<img src="${url}" alt=""><span class="label"><b>${escapeHtml(file.name)}</b></span>`;
+  }
+
+  const PHOTO_EMPTY = '<b>Choose a photo</b>: action shots work best';
+  const LOGO_EMPTY = '<b>Use a different logo</b>: otherwise the brand kit logo';
+
+  dropzone($('photoPick'), {
+    accept: 'image/*',
+    onFiles: async ([file]) => {
+      try {
+        S.photo = await shrink(file, 2400);
+        S.photoPreview = await shrink(file, 1200, 0.8);
+        showPick($('photoPick'), file, S.photoPreview, PHOTO_EMPTY);
+        $('photoActions').hidden = false;
+        schedule();
+      } catch (err) { toast(err.message); }
+    }
+  });
+  $('photoClear').addEventListener('click', () => {
+    S.photo = S.photoPreview = null;
+    showPick($('photoPick'), null, null, PHOTO_EMPTY);
+    $('photoActions').hidden = true;
+    schedule();
+  });
+
+  dropzone($('logoPick'), {
+    accept: 'image/*,.svg',
+    onFiles: ([file]) => {
+      S.logo = file;
+      showPick($('logoPick'), file, null, LOGO_EMPTY);
+      $('logoClear').hidden = false;
+      $('showLogo').checked = true;
+      schedule();
+    }
+  });
+  $('logoClear').addEventListener('click', () => {
+    S.logo = null;
+    showPick($('logoPick'), null, null, LOGO_EMPTY);
+    $('logoClear').hidden = true;
+    schedule();
+  });
+
+  // --- build request ----------------------------------------------------------------
+
+  function formData(output) {
+    const fd = new FormData();
+    fd.append('output', output);
+    fd.append('template', S.template);
+    fd.append('brandId', $('brand').value);
+    for (const k of ['size', 'headline', 'subheadline', 'date', 'time', 'location', 'price', 'details', 'cta', 'url', 'urlLabel', 'website']) {
+      fd.append(k, $(k).value);
+    }
+    fd.append('primary', $('primary').value.toUpperCase());
+    fd.append('accent', $('accent').value.toUpperCase());
+    fd.append('showLogo', String($('showLogo').checked));
+    const photo = output === 'preview' ? S.photoPreview : S.photo;
+    if (S.template === 'photo' && photo) fd.append('photo', photo, 'photo.jpg');
+    if (S.logo && $('showLogo').checked) fd.append('logo', S.logo, S.logo.name);
+    return fd;
+  }
+
+  // --- live preview -----------------------------------------------------------------
+
+  async function refresh() {
+    const seq = ++S.seq;
+    $('frame').classList.add('loading');
+    $('spinner').hidden = false;
+    try {
+      const res = await upload('/print/flyer', formData('preview'));
+      const blob = await res.blob();
+      if (seq !== S.seq) return; // a newer edit is already on its way
+      if (S.previewUrl) URL.revokeObjectURL(S.previewUrl);
+      S.previewUrl = URL.createObjectURL(blob);
+      $('previewImg').src = S.previewUrl;
+      $('previewImg').hidden = false;
+      $('placeholder').hidden = true;
+      $('notes').innerHTML = '';
+      if (S.template === 'photo' && !S.photo) note($('notes'), 'warn', 'Add a photo to use the Photo style. Until then the Bold style is shown.');
+    } catch (err) {
+      if (seq !== S.seq) return;
+      $('notes').innerHTML = '';
+      note($('notes'), 'err', err.message);
+      if ($('previewImg').hidden) $('placeholder').textContent = 'No preview yet.';
+    } finally {
+      if (seq === S.seq) {
+        $('frame').classList.remove('loading');
+        $('spinner').hidden = true;
+      }
+    }
+  }
+  const schedule = debounce(() => { saveDraft(); refresh(); }, 700);
+
+  $('form').addEventListener('input', schedule);
+  $('form').addEventListener('change', schedule);
+  $('form').addEventListener('submit', (e) => e.preventDefault());
+  $('brand').addEventListener('change', () => { applyBrandColors(); schedule(); });
+  $('resetColors').addEventListener('click', () => { applyBrandColors(); schedule(); });
+  $('size').addEventListener('change', updateSizeNote);
+
+  function updateSizeNote() {
+    const social = ['square', 'portrait', 'story', 'landscape'].includes($('size').value);
+    $('sizeNote').textContent = social
+      ? 'Social size: download the PNG to post it. The PDF is there if you need it.'
+      : 'Print size: the PDF prints sharp at any size. The PNG is for email or texting.';
+  }
+
+  // --- downloads --------------------------------------------------------------------
+
+  async function download(button, output) {
+    await busy(button, 'Preparing…', async () => {
+      try {
+        const res = await upload('/print/flyer', formData(output));
+        downloadBlob(await res.blob(), filenameFrom(res, `flyer.${output}`));
+      } catch (err) {
+        $('notes').innerHTML = '';
+        note($('notes'), 'err', err.message);
+      }
+    });
+  }
+  $('dlPdf').addEventListener('click', (e) => download(e.currentTarget, 'pdf'));
+  $('dlPng').addEventListener('click', (e) => download(e.currentTarget, 'png'));
+
+  loadOptions().then(() => {
+    restoreDraft();
+    updateSizeNote();
+    refresh();
+  });
+})();
+</script>
+</body>
+</html>

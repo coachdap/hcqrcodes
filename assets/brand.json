@@ -1,0 +1,27 @@
+{
+  "brands": [
+    {
+      "id": "hoops-college",
+      "name": "Hoops College",
+      "website": "hoopscollege.com",
+      "tagline": "",
+      "colors": [
+        { "name": "Navy", "hex": "#0B1F3A" },
+        { "name": "White", "hex": "#FFFFFF" }
+      ],
+      "fonts": [],
+      "notes": "Seeded from the repository. Add the full palette, fonts and logo variants from the Brand kit page.",
+      "logos": [{ "id": "hc-mark", "name": "HC mark", "file": "hc-logo.svg" }]
+    },
+    {
+      "id": "chase-excellence",
+      "name": "Chase Excellence",
+      "website": "",
+      "tagline": "",
+      "colors": [],
+      "fonts": [],
+      "notes": "No logo or colours on file yet. Upload them from the Brand kit page.",
+      "logos": []
+    }
+  ]
+}

@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Image converter · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .results { margin-top: 18px; }
+  .tbl-wrap { overflow-x: auto; }
+  table.list img.thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; display: block; }
+  table.list td.name { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .summary .grow { flex: 1; }
+  @media (max-width: 560px) { table.list .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="convert">
+  <header class="page">
+    <div>
+      <h1>Image converter</h1>
+      <div class="sub">Convert photos and graphics between JPG, PNG, WebP and AVIF, and resize them on the way. Drop as many as you like. For vector logos you want to crop first, use <a href="/ui/svg">SVG → WebP</a>.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="drop" id="drop"></div>
+      <div id="queueWrap" class="results" hidden>
+        <div class="tbl-wrap"><table class="list" id="table"></table></div>
+        <div class="summary">
+          <span class="muted" id="totals"></span>
+          <span class="grow"></span>
+          <button type="button" class="ghost small" id="clear">Clear</button>
+          <button type="button" class="small" id="zipAll" disabled>Download all (zip)</button>
+        </div>
+      </div>
+      <div id="notes"></div>
+    </div>
+
+    <form class="panel sticky" id="form">
+      <div class="field">
+        <label>Convert to</label>
+        <div class="seg full" id="formatSeg">
+          <button type="button" data-f="webp" class="on">WebP</button>
+          <button type="button" data-f="jpeg">JPG</button>
+          <button type="button" data-f="png">PNG</button>
+          <button type="button" data-f="avif">AVIF</button>
+        </div>
+        <div class="hint" id="formatHint"></div>
+      </div>
+
+      <div class="field" id="qualityField">
+        <div class="rangehead"><label for="quality">Quality</label><b id="qualityVal">85</b></div>
+        <input type="range" id="quality" min="40" max="100" value="85">
+      </div>
+      <div class="field" id="losslessField">
+        <label class="toggle"><input type="checkbox" id="lossless"> Lossless (exact pixels, bigger file)</label>
+      </div>
+
+      <div class="field">
+        <label>Resize <span class="muted" style="font-weight:500">— leave blank to keep the size</span></label>
+        <div class="row">
+          <input type="number" id="width" min="1" max="8192" placeholder="Max width px" aria-label="Width">
+          <input type="number" id="height" min="1" max="8192" placeholder="Max height px" aria-label="Height">
+        </div>
+      </div>
+      <div class="field" id="fitField" hidden>
+        <label for="fit">When both are set</label>
+        <select id="fit">
+          <option value="inside">Fit inside (keep whole image)</option>
+          <option value="cover">Fill and crop (smart crop)</option>
+          <option value="contain">Fit and pad with background</option>
+        </select>
+      </div>
+
+      <div class="field" id="bgField">
+        <label for="bg">Background</label>
+        <div class="inline" style="flex-wrap:nowrap">
+          <select id="bg">
+            <option value="transparent">Keep transparency</option>
+            <option value="#FFFFFF">White</option>
+            <option value="#000000">Black</option>
+            <option value="#0B1F3A">HC navy</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <input type="color" id="bgColor" value="#FFFFFF" style="width:46px;flex:none" hidden>
+        </div>
+        <div class="hint" id="bgHint"></div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="go" disabled>Convert</button>
+      </div>
+      <div class="hint" style="margin-top:12px">iPhone HEIC photos can't be read here. Set Settings → Camera → Formats → <b>Most Compatible</b>, or AirDrop/email them, which sends JPGs.</div>
+    </form>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, upload, note, toast, formatBytes, downloadBlob, filenameFrom, zip, escapeHtml, dropzone, dropMarkup } = qrgenUI;
+  const ACCEPT = 'image/*,.jpg,.jpeg,.png,.webp,.avif,.gif,.tif,.tiff,.svg,.heic,.heif';
+  const items = [];   // { file, status, result: { blob, name, width, height }, error, thumb }
+  let format = 'webp';
+  let running = false;
+
+  $('drop').innerHTML = dropMarkup('Drop images here', 'or click to choose. JPG, PNG, WebP, AVIF, GIF, TIFF or SVG, up to 25 MB each. You can also paste.');
+  dropzone($('drop'), { accept: ACCEPT, multiple: true, paste: true, onFiles: add });
+
+  function add(files) {
+    for (const file of files) items.push({ file, status: 'ready', thumb: /\.(tiff?|heic|heif)$/i.test(file.name) ? '' : URL.createObjectURL(file) });
+    render();
+  }
+
+  function render() {
+    $('queueWrap').hidden = !items.length;
+    $('go').disabled = !items.some((i) => i.status === 'ready' || i.status === 'error') || running;
+    $('table').innerHTML = '<thead><tr><th></th><th>File</th><th class="hide-sm">Before</th><th>After</th><th></th></tr></thead><tbody>' +
+      items.map((it, i) => {
+        const r = it.result;
+        let after = '<span class="pill">Ready</span>';
+        if (it.status === 'working') after = '<span class="pill">Converting…</span>';
+        if (it.status === 'error') after = `<span class="pill bad" title="${escapeHtml(it.error)}">Failed</span>`;
+        if (r) {
+          const pct = Math.round((1 - r.blob.size / it.file.size) * 100);
+          after = `${formatBytes(r.blob.size)} ${pct > 0 ? `<span class="pill good">−${pct}%</span>` : pct < 0 ? `<span class="pill">${pct < -100 ? 'larger' : '+' + -pct + '%'}</span>` : ''}`;
+        }
+        return `<tr><td>${it.thumb ? `<img class="thumb checker" src="${it.thumb}" alt="">` : ''}</td>` +
+          `<td class="name" title="${escapeHtml(it.file.name)}">${escapeHtml(r ? r.name : it.file.name)}</td>` +
+          `<td class="num hide-sm">${formatBytes(it.file.size)}</td><td class="num">${after}${r ? `<div class="muted" style="font-size:11.5px">${r.width}×${r.height}</div>` : ''}</td>` +
+          `<td style="white-space:nowrap">${r ? `<button type="button" class="small" data-dl="${i}">Download</button>` : ''}<button type="button" class="iconbtn" data-rm="${i}" aria-label="Remove">✕</button></td></tr>`;
+      }).join('') + '</tbody>';
+    $('table').querySelectorAll('[data-dl]').forEach((b) => b.addEventListener('click', () => { const r = items[b.dataset.dl].result; downloadBlob(r.blob, r.name); }));
+    $('table').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { if (running) return; items.splice(Number(b.dataset.rm), 1); render(); }));
+
+    const done = items.filter((i) => i.result);
+    $('zipAll').disabled = !done.length;
+    const before = done.reduce((a, i) => a + i.file.size, 0);
+    const after = done.reduce((a, i) => a + i.result.blob.size, 0);
+    $('totals').textContent = done.length ? `${done.length} of ${items.length} converted · ${formatBytes(before)} → ${formatBytes(after)}` : `${items.length} file${items.length === 1 ? '' : 's'} ready`;
+  }
+
+  function paintOptions() {
+    document.querySelectorAll('#formatSeg button').forEach((b) => b.classList.toggle('on', b.dataset.f === format));
+    $('formatHint').textContent = {
+      webp: 'Best for websites: small files, supports transparency.',
+      jpeg: 'Works everywhere. No transparency, so it gets a background.',
+      png: 'Exact and supports transparency. Large for photos.',
+      avif: 'Smallest files. Newer, so some older apps can\'t open it.'
+    }[format];
+    $('losslessField').hidden = !(format === 'webp' || format === 'avif');
+    $('qualityField').hidden = $('lossless').checked && !$('losslessField').hidden;
+    $('fitField').hidden = !($('width').value && $('height').value);
+    $('bgColor').hidden = $('bg').value !== 'custom';
+    const jpg = format === 'jpeg';
+    $('bg').options[0].textContent = jpg ? 'White (JPG has no transparency)' : 'Keep transparency';
+    $('bgHint').textContent = jpg ? 'Transparent areas are filled with this colour.' : 'Fills transparent areas (and padding, if any).';
+  }
+
+  document.querySelectorAll('#formatSeg button').forEach((b) => b.addEventListener('click', () => { format = b.dataset.f; paintOptions(); }));
+  ['quality', 'lossless', 'width', 'height', 'bg'].forEach((id) => $(id).addEventListener('input', () => { $('qualityVal').textContent = $('quality').value; paintOptions(); }));
+  $('bg').addEventListener('change', paintOptions);
+
+  function background() {
+    const v = $('bg').value;
+    if (v === 'custom') return $('bgColor').value.toUpperCase();
+    return v;
+  }
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (running) return;
+    running = true;
+    $('notes').innerHTML = '';
+    const go = $('go');
+    go.textContent = 'Converting…';
+    for (const it of items) if (it.status !== 'working' && !it.result) it.status = 'ready';
+    for (const it of items.filter((i) => i.status === 'ready')) {
+      it.status = 'working';
+      render();
+      const form = new FormData();
+      form.append('files', it.file);
+      form.append('format', format);
+      form.append('quality', $('quality').value);
+      form.append('lossless', $('lossless').checked && !$('losslessField').hidden);
+      if ($('width').value) form.append('width', $('width').value);
+      if ($('height').value) form.append('height', $('height').value);
+      form.append('fit', $('fit').value);
+      form.append('background', format === 'jpeg' && background() === 'transparent' ? '#FFFFFF' : background());
+      try {
+        const res = await upload('/image/convert', form);
+        it.result = { blob: await res.blob(), name: filenameFrom(res, it.file.name), width: res.headers.get('x-image-width'), height: res.headers.get('x-image-height') };
+        it.status = 'done';
+      } catch (err) {
+        it.status = 'error';
+        it.error = err.message.replace(/<[^>]+>/g, ' ');
+        note($('notes'), 'err', `<b>${escapeHtml(it.file.name)}</b>: ${err.message}`);
+        if (/token/i.test(err.message)) { it.status = 'ready'; break; }
+      }
+      render();
+    }
+    running = false;
+    go.textContent = 'Convert';
+    render();
+    const ok = items.filter((i) => i.result).length;
+    if (ok) toast(`${ok} image${ok === 1 ? '' : 's'} converted`);
+  });
+
+  // Changing settings after a run lets you convert the same files again.
+  $('form').addEventListener('input', () => {
+    if (running) return;
+    let changed = false;
+    for (const it of items) if (it.result) { it.result = null; it.status = 'ready'; changed = true; }
+    if (changed) render();
+  });
+  document.querySelectorAll('#formatSeg button').forEach((b) => b.addEventListener('click', () => $('form').dispatchEvent(new Event('input'))));
+
+  $('zipAll').addEventListener('click', async () => {
+    const done = items.filter((i) => i.result);
+    if (done.length === 1) return downloadBlob(done[0].result.blob, done[0].result.name);
+    downloadBlob(await zip(done.map((i) => ({ name: i.result.name, blob: i.result.blob }))), 'converted-images.zip');
+  });
+  $('clear').addEventListener('click', () => { if (running) return; items.length = 0; $('notes').innerHTML = ''; render(); });
+
+  paintOptions();
+})();
+</script>
+</body>
+</html>

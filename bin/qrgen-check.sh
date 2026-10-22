@@ -83,13 +83,29 @@ check "malformed JSON"        400 "$(code -X POST "${JSON[@]}" "${AUTH[@]}" -d '
 check "over-capacity payload" 413 "$(code -X POST "${JSON[@]}" "${AUTH[@]}" -d "{\"data\":\"$(printf 'y%.0s' $(seq 1 2400))\"}" "$BASE/generate")"
 
 # Optional surfaces: only checked when the deployment has them.
-if [ "$(code "$BASE/ui/utilities")" = "200" ]; then
-  echo "utilities"
-  check "GET /ui/utilities"   200 "$(code "$BASE/ui/utilities")"
-  check "GET /ui/shared.css"  200 "$(code "$BASE/ui/shared.css")"
-  check "GET /ui/shared.js"   200 "$(code "$BASE/ui/shared.js")"
-  check "POST /convert/svg"   200 "$(code -X POST "${JSON[@]}" "${AUTH[@]}" \
+if [ "$(code "$BASE/ui/svg")" = "200" ]; then
+  echo "utilities hub"
+  for page in "" /qr /links /svg /convert /social /compress /favicon /flyer /tags /checkin /pdf /video /brand; do
+    check "GET /ui$page" 200 "$(code "$BASE/ui$page")"
+  done
+  check "GET /ui/utilities → /ui/svg" 301 "$(code "$BASE/ui/utilities")"
+  check "GET /ui/vendor/jsQR.js"  200 "$(code "$BASE/ui/vendor/jsQR.js")"
+  check "POST /convert/svg"       200 "$(code -X POST "${JSON[@]}" "${AUTH[@]}" \
     -d '{"svg":"<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 10 10\"><rect width=\"5\" height=\"5\"/></svg>","format":"webp"}' "$BASE/convert/svg")"
+  check "GET /tools/meta"         200 "$(code "${AUTH[@]}" "$BASE/tools/meta")"
+  check "GET /brand"              200 "$(code "${AUTH[@]}" "$BASE/brand")"
+  check "GET /checkin/events"     200 "$(code "${AUTH[@]}" "$BASE/checkin/events")"
+
+  # A tiny PNG made by the server itself feeds the image and PDF tools.
+  curl -s -m 30 -o "$tmp/q.png" -X POST "${JSON[@]}" "${AUTH[@]}" -d '{"data":"hc","format":"png","size":256}' "$BASE/generate"
+  check "POST /image/convert"     200 "$(code -X POST "${AUTH[@]}" -F "files=@$tmp/q.png" -F format=webp "$BASE/image/convert")"
+  check "POST /image/compress"    200 "$(code -X POST "${AUTH[@]}" -F "files=@$tmp/q.png" "$BASE/image/compress")"
+  curl -s -m 60 -o "$tmp/q.pdf" -X POST "${AUTH[@]}" -F "files=@$tmp/q.png" "$BASE/pdf/from-images"
+  if [ "$(head -c 4 "$tmp/q.pdf")" = "%PDF" ]; then ok "POST /pdf/from-images" "$(wc -c < "$tmp/q.pdf" | tr -d ' ') bytes"; else bad "POST /pdf/from-images" "not a PDF"; fi
+  check "POST /pdf/compress (gs)"  200 "$(code -X POST "${AUTH[@]}" -F "files=@$tmp/q.pdf" "$BASE/pdf/compress")"
+  check "POST /pdf/to-images (poppler)" 200 "$(code -X POST "${AUTH[@]}" -F "files=@$tmp/q.pdf" "$BASE/pdf/to-images")"
+  check "POST /print/flyer"       200 "$(code -X POST "${AUTH[@]}" -F headline=Smoke -F url=https://hoopscollege.com -F output=preview "$BASE/print/flyer")"
+  check "POST /print/tags"        200 "$(code -X POST "${JSON[@]}" "${AUTH[@]}" -d '{"rows":[{"name":"Smoke Test","id":"SMOKE1"}]}' "$BASE/print/tags")"
 fi
 
 rm -rf "$tmp"

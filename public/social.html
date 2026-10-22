@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Social sizes · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .sizes-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
+  .pgroup { margin-bottom: 12px; }
+  .pgroup h4 { margin: 0 0 6px; font-size: 12px; color: var(--muted); font-weight: 600; }
+  .check-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .previews { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 14px; align-items: end; margin-top: 16px; }
+  .pv figure { margin: 0; }
+  .pv .frame { position: relative; width: 100%; overflow: hidden; border-radius: 6px; background: var(--soft); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+  .pv .frame img { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .pv .frame img.bg { object-fit: cover; filter: blur(14px) brightness(.7); transform: scale(1.15); }
+  .pv figcaption { font-size: 12px; margin-top: 6px; color: var(--muted); line-height: 1.35; }
+  .pv figcaption b { color: var(--text); font-weight: 600; display: block; }
+  .source { display: flex; align-items: center; gap: 12px; }
+  .source img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+  .source .name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="social">
+  <header class="page">
+    <div>
+      <h1>Social sizes</h1>
+      <div class="sub">Upload one image and get it cropped to every size Instagram, Facebook, X, YouTube and the website need, in a single zip.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="drop" id="drop"></div>
+      <div class="panel" id="sourcePanel" hidden>
+        <div class="source">
+          <img id="srcThumb" alt="">
+          <div style="min-width:0;flex:1"><div class="name" id="srcName"></div><div class="muted" id="srcInfo" style="font-size:12.5px"></div></div>
+          <button type="button" class="ghost small" id="change">Change image</button>
+        </div>
+        <div id="srcNotes"></div>
+        <div class="previews" id="previews"></div>
+        <div class="hint" style="margin-top:12px">The previews are approximate. Smart crop on the server finds the busiest part of the picture, such as faces and action.</div>
+      </div>
+    </div>
+
+    <form class="panel sticky" id="form">
+      <div class="sizes-head">
+        <div class="section" style="margin:0">Sizes</div>
+        <div class="inline"><button type="button" class="iconbtn" id="all">All</button><button type="button" class="iconbtn" id="none">None</button></div>
+      </div>
+      <div id="presets"></div>
+
+      <hr>
+      <div class="field">
+        <label for="mode">Cropping</label>
+        <select id="mode">
+          <option value="smart">Smart crop (finds the subject)</option>
+          <option value="center">Crop from the centre</option>
+          <option value="top">Keep the top</option>
+          <option value="bottom">Keep the bottom</option>
+          <option value="blur">Don't crop: fit on a blurred background</option>
+          <option value="color">Don't crop: fit on a solid colour</option>
+        </select>
+      </div>
+      <div class="field" id="colorField" hidden>
+        <label for="bg">Background colour</label>
+        <input type="color" id="bg" value="#0B1F3A">
+      </div>
+      <div class="field">
+        <label>File type</label>
+        <div class="seg full" id="formatSeg">
+          <button type="button" data-f="jpeg" class="on">JPG</button>
+          <button type="button" data-f="png">PNG</button>
+          <button type="button" data-f="webp">WebP</button>
+        </div>
+        <div class="hint">JPG is what every platform expects. Use PNG for graphics with lots of text.</div>
+      </div>
+      <div class="actions">
+        <button type="submit" id="go" disabled>Download sizes (zip)</button>
+      </div>
+      <div id="notes"></div>
+    </form>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, upload, note, toast, busy, downloadBlob, filenameFrom, escapeHtml, dropzone, dropMarkup, currentToken } = qrgenUI;
+
+  // Fallback copy of SOCIAL_PRESETS (src/tools/images.js); /tools/meta is the source of truth.
+  let PRESETS = {
+    'instagram-square': { label: 'Instagram post (square)', width: 1080, height: 1080 },
+    'instagram-portrait': { label: 'Instagram post (portrait)', width: 1080, height: 1350 },
+    'instagram-story': { label: 'Story / Reel / TikTok', width: 1080, height: 1920 },
+    'facebook-post': { label: 'Facebook / link preview', width: 1200, height: 630 },
+    'facebook-cover': { label: 'Facebook page cover', width: 1640, height: 624 },
+    'facebook-event': { label: 'Facebook event cover', width: 1920, height: 1005 },
+    'x-post': { label: 'X (Twitter) post', width: 1600, height: 900 },
+    'x-header': { label: 'X (Twitter) header', width: 1500, height: 500 },
+    'youtube-thumbnail': { label: 'YouTube thumbnail', width: 1280, height: 720 },
+    'youtube-banner': { label: 'YouTube channel banner', width: 2560, height: 1440 },
+    'linkedin-post': { label: 'LinkedIn post', width: 1200, height: 627 },
+    'website-hero': { label: 'Website hero (16:9)', width: 1920, height: 1080 },
+    'email-header': { label: 'Email header', width: 1200, height: 400 }
+  };
+  const GROUPS = [
+    ['Instagram & TikTok', /^instagram/],
+    ['Facebook', /^facebook/],
+    ['X & YouTube', /^(x|youtube)-/],
+    ['Website & other', /.*/]
+  ];
+  const DEFAULT_ON = ['instagram-square', 'instagram-portrait', 'instagram-story', 'facebook-post', 'facebook-event'];
+  const selected = new Set(DEFAULT_ON);
+  let file = null, url = '', natural = null, format = 'jpeg';
+
+  $('drop').innerHTML = dropMarkup('Drop an image here', 'or click to choose. A large, high-quality photo works best. You can also paste.');
+  const dz = dropzone($('drop'), { accept: 'image/*,.jpg,.jpeg,.png,.webp,.avif,.gif,.tif,.tiff,.svg', paste: true, onFiles: ([f]) => load(f) });
+
+  function load(f) {
+    file = f;
+    if (url) URL.revokeObjectURL(url);
+    url = URL.createObjectURL(f);
+    natural = null;
+    const img = new Image();
+    img.onload = () => { natural = { w: img.naturalWidth, h: img.naturalHeight }; info(); };
+    img.src = url;
+    $('srcThumb').src = url;
+    $('srcName').textContent = f.name;
+    $('drop').hidden = true;
+    $('sourcePanel').hidden = false;
+    $('notes').innerHTML = '';
+    info();
+    renderPreviews();
+    paint();
+  }
+
+  function info() {
+    const parts = [qrgenUI.formatBytes(file.size)];
+    if (natural) parts.unshift(`${natural.w}×${natural.h}`);
+    $('srcInfo').textContent = parts.join(' · ');
+    $('srcNotes').innerHTML = '';
+    if (natural) {
+      const need = Math.max(...[...selected].map((id) => PRESETS[id]?.width || 0));
+      if (natural.w < need * 0.6) note($('srcNotes'), 'warn', `This image is ${natural.w}px wide; some sizes need ${need}px, so they will look soft. Use a larger original if you have one.`);
+    }
+  }
+
+  function renderPresets() {
+    const ids = Object.keys(PRESETS);
+    const used = new Set();
+    $('presets').innerHTML = GROUPS.map(([name, re]) => {
+      const mine = ids.filter((id) => !used.has(id) && re.test(id));
+      mine.forEach((id) => used.add(id));
+      if (!mine.length) return '';
+      return `<div class="pgroup"><h4>${name}</h4><div class="check-grid">` + mine.map((id) =>
+        `<label class="toggle"><input type="checkbox" data-id="${id}"${selected.has(id) ? ' checked' : ''}> ${escapeHtml(PRESETS[id].label)} <small>${PRESETS[id].width}×${PRESETS[id].height}</small></label>`).join('') + '</div></div>';
+    }).join('');
+    $('presets').querySelectorAll('input').forEach((c) => c.addEventListener('change', () => {
+      c.checked ? selected.add(c.dataset.id) : selected.delete(c.dataset.id);
+      paint();
+    }));
+  }
+
+  function renderPreviews() {
+    if (!file) return;
+    const mode = $('mode').value;
+    const pos = { top: 'center top', bottom: 'center bottom' }[mode] || 'center';
+    const fit = mode === 'blur' || mode === 'color' ? 'contain' : 'cover';
+    const ids = Object.keys(PRESETS).filter((id) => selected.has(id));
+    $('previews').innerHTML = ids.length ? ids.map((id) => {
+      const p = PRESETS[id];
+      const bg = mode === 'blur' ? `<img class="bg" src="${url}" alt="">` : '';
+      const color = mode === 'color' ? ` style="background:${$('bg').value};padding-top:${(p.height / p.width) * 100}%"` : ` style="padding-top:${(p.height / p.width) * 100}%"`;
+      return `<div class="pv"><figure><div class="frame"${color}>${bg}<img src="${url}" alt="" style="object-fit:${fit};object-position:${pos}"></div>` +
+        `<figcaption><b>${escapeHtml(p.label)}</b>${p.width}×${p.height}</figcaption></figure></div>`;
+    }).join('') : '<div class="muted">Pick at least one size.</div>';
+  }
+
+  function paint() {
+    $('colorField').hidden = $('mode').value !== 'color';
+    document.querySelectorAll('#formatSeg button').forEach((b) => b.classList.toggle('on', b.dataset.f === format));
+    $('go').disabled = !file || !selected.size;
+    $('go').textContent = selected.size ? `Download ${selected.size} size${selected.size === 1 ? '' : 's'} (zip)` : 'Pick a size';
+    if (file) { renderPreviews(); info(); }
+  }
+
+  $('all').addEventListener('click', () => { Object.keys(PRESETS).forEach((id) => selected.add(id)); renderPresets(); paint(); });
+  $('none').addEventListener('click', () => { selected.clear(); renderPresets(); paint(); });
+  $('mode').addEventListener('change', paint);
+  $('bg').addEventListener('input', paint);
+  document.querySelectorAll('#formatSeg button').forEach((b) => b.addEventListener('click', () => { format = b.dataset.f; paint(); }));
+  $('change').addEventListener('click', () => dz.open());
+
+  $('form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!file || !selected.size) return;
+    $('notes').innerHTML = '';
+    busy($('go'), 'Making sizes…', async () => {
+      const form = new FormData();
+      form.append('files', file);
+      form.append('presets', [...selected].join(','));
+      form.append('mode', $('mode').value);
+      form.append('background', $('bg').value.toUpperCase());
+      form.append('format', format);
+      try {
+        const res = await upload('/image/social', form);
+        const blob = await res.blob();
+        downloadBlob(blob, filenameFrom(res, 'social-sizes.zip'));
+        const warn = res.headers.get('x-image-warning');
+        if (warn) warn.split(' | ').forEach((w) => note($('notes'), 'warn', escapeHtml(w)));
+        toast('Zip downloaded');
+      } catch (err) {
+        note($('notes'), 'err', err.message);
+      }
+    }).then(paint);
+  });
+
+  // Pull the live preset list without prompting for a token; the fallback covers it.
+  const headers = currentToken() ? { Authorization: 'Bearer ' + currentToken() } : {};
+  fetch('/tools/meta', { headers }).then((r) => (r.ok ? r.json() : null)).then((meta) => {
+    if (meta?.socialPresets) { PRESETS = meta.socialPresets; renderPresets(); paint(); }
+  }).catch(() => {});
+
+  renderPresets();
+  paint();
+})();
+</script>
+</body>
+</html>

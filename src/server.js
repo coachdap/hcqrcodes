@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -10,6 +11,7 @@ import { wifiRequestSchema, vcardRequestSchema, batchSchema } from './schema.js'
 import { bearerAuth, isInternalRequest } from './auth.js';
 import { rateLimit } from './ratelimit.js';
 import { analyzeSvg, convertSvg } from './svgconvert.js';
+import { registerToolRoutes } from './tools/routes.js';
 
 const PORT = Number(process.env.PORT ?? 3000);
 const HOST = process.env.HOST ?? '0.0.0.0';
@@ -18,13 +20,16 @@ const TRUST_INTERNAL = (process.env.QRGEN_TRUST_INTERNAL ?? 'true') !== 'false';
 const LOGO_DIR = process.env.QRGEN_LOGO_DIR ?? '/output/logos';
 const BODY_LIMIT = process.env.QRGEN_BODY_LIMIT ?? '10mb';
 
+const require = createRequire(import.meta.url);
 const PUBLIC_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'public');
 
 // Pages are read once at startup, like the rest of the app's config: a missing
 // file fails the boot rather than a request.
+// /ui is the tools home; every tool is /ui/<slug>, served from public/<slug>.html.
+export const TOOL_PAGES = ['qr', 'links', 'svg', 'convert', 'social', 'compress', 'favicon', 'flyer', 'tags', 'checkin', 'pdf', 'video', 'brand'];
 const PAGES = {
   '/ui': readFileSync(path.join(PUBLIC_DIR, 'index.html'), 'utf8'),
-  '/ui/utilities': readFileSync(path.join(PUBLIC_DIR, 'utilities.html'), 'utf8')
+  ...Object.fromEntries(TOOL_PAGES.map((slug) => [`/ui/${slug}`, readFileSync(path.join(PUBLIC_DIR, `${slug}.html`), 'utf8')]))
 };
 
 export function createApp() {
@@ -42,6 +47,10 @@ export function createApp() {
   for (const [route, html] of Object.entries(PAGES)) {
     app.get(route, (req, res) => res.type('html').send(html));
   }
+  // The SVG converter used to be the whole Utilities page; keep its old address working.
+  app.get('/ui/utilities', (req, res) => res.redirect(301, '/ui/svg'));
+  // The check-in scanner decodes QR codes in the browser with jsQR.
+  app.get('/ui/vendor/jsQR.js', (req, res) => res.type('js').sendFile(require.resolve('jsqr/dist/jsQR.js')));
   app.use('/ui', express.static(PUBLIC_DIR, { index: false, redirect: false, extensions: false }));
 
   // Lets the UI show or hide its token field without generating a throwaway QR.
@@ -57,11 +66,10 @@ export function createApp() {
     if ((req.headers.accept ?? '').includes('text/html')) return res.redirect(302, '/ui');
     res.json({
       service: 'qrgen',
-      description: 'QR code generation for Hoops College and Chase Excellence.',
+      description: 'QR code generation and everyday utilities for Hoops College and Chase Excellence.',
       docs: 'https://github.com/coachdap/hcqrcodes',
       ui: 'https://qr.hoopscollege.com/ui',
-      utilities: 'https://qr.hoopscollege.com/ui/utilities',
-      note: 'All generation and conversion endpoints are POST with a JSON body. GET returns 405.',
+      note: 'Generation and conversion endpoints are POST (JSON, or multipart for file uploads). GET on them returns 405.',
       auth: 'Bearer token required for external callers; callers on hc-internal are exempt.',
       endpoints: {
         'GET  /health': 'liveness, no auth',
@@ -70,7 +78,13 @@ export function createApp() {
         'POST /generate/vcard': '{ name, org, title, phone, email, url } + render options',
         'POST /generate/batch': '{ items: [...], format } — returns a zip',
         'POST /convert/svg': 'SVG → WebP/PNG — { svg, format, crop, cropRect, padding, width, height, scale, quality, lossless, background, name }',
-        'POST /convert/svg/analyze': '{ svg } — canvas (viewBox) and artwork bounds in user units'
+        'POST /convert/svg/analyze': '{ svg } — canvas (viewBox) and artwork bounds in user units',
+        'POST /image/{convert,compress,social,favicon}': 'multipart image uploads — see README "Utilities API"',
+        'POST /pdf/{merge,split,compress,to-images,from-images}': 'multipart PDF/image uploads',
+        'POST /video/jobs': 'multipart video upload → background job; poll GET /video/jobs/:id',
+        'POST /print/{flyer,tags}': 'branded flyer (multipart) and name tags / rosters (JSON) as PDF',
+        '/checkin/events…': 'event check-in: events, roster, scan, export.csv',
+        '/brand…': 'brand kit: logos, colours, fonts'
       }
     });
   });
@@ -80,7 +94,9 @@ export function createApp() {
   // Order matters: shed floods, then reject unauthenticated callers, and only
   // then parse the body. An unauthenticated 9MB POST is now rejected in
   // milliseconds instead of being fully parsed first.
-  const guard = [rateLimit({ phase: 'pre' }), auth, parseJson, rateLimit({ phase: 'post' })];
+  const pre = rateLimit({ phase: 'pre' });
+  const post = rateLimit({ phase: 'post' });
+  const guard = [pre, auth, parseJson, post];
 
   app.post('/generate', guard, async (req, res, next) => {
     try {
@@ -184,6 +200,8 @@ export function createApp() {
     }
   });
 
+  registerToolRoutes(app, { pre, auth, post, json: parseJson });
+
   const POST_ROUTES = ['/generate', '/generate/wifi', '/generate/vcard', '/generate/batch', '/convert/svg', '/convert/svg/analyze'];
 
   app.use((req, res) => {
@@ -233,12 +251,14 @@ export function createApp() {
     }
 
     const status = err.status ?? 500;
-    if (status >= 500) console.error('[qrgen]', err);
+    // Tool errors such as BUSY or TIMEOUT are 5xx but written for the user.
+    const explained = status < 500 || err.expose;
+    if (!explained) console.error('[qrgen]', err);
 
     res.status(status).json({
       error: {
-        code: err.code ?? 'INTERNAL_ERROR',
-        message: status >= 500 ? 'Internal error generating QR code.' : err.message,
+        code: err.code ?? (explained ? 'ERROR' : 'INTERNAL_ERROR'),
+        message: explained ? err.message : 'Internal error. The details are in the server log.',
         ...(err.details ? { details: err.details } : {})
       }
     });

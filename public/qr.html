@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QR code · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .preview { display: flex; align-items: center; justify-content: center; min-height: 300px; padding: 18px; border-radius: 8px; }
+  .preview svg, .preview img { width: 100%; height: auto; max-width: 340px; display: block; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="qr">
+  <header class="page">
+    <div>
+    <h1>QR code</h1>
+    <div class="sub">Print-ready QR codes for flyers, signage, jersey tags and registration links.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <form class="panel" id="form">
+      <div class="field">
+        <div class="seg full" role="tablist" aria-label="QR content">
+          <button type="button" class="on" data-kind="link" role="tab" aria-selected="true">Link or text</button>
+          <button type="button" data-kind="wifi" role="tab" aria-selected="false">Wi-Fi</button>
+          <button type="button" data-kind="vcard" role="tab" aria-selected="false">Contact card</button>
+        </div>
+      </div>
+
+      <div data-pane="link">
+        <div class="field">
+          <label for="data">Link or text</label>
+          <input type="text" id="data" placeholder="https://hoopscollege.com/tryouts" autocomplete="off">
+          <div class="hint" id="capacity"></div>
+          <div class="hint">Want to know which flyer or sign people scanned? Build a tracked link in the <a href="/ui/links">Link builder</a>.</div>
+        </div>
+      </div>
+
+      <div data-pane="wifi" hidden>
+        <div class="row">
+          <div class="field"><label for="ssid">Network name</label><input type="text" id="ssid" autocomplete="off" placeholder="HC-Guest"></div>
+          <div class="field"><label for="wifiPass">Password</label><input type="text" id="wifiPass" autocomplete="off"></div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label for="encryption">Security</label>
+            <select id="encryption"><option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">None (open)</option></select>
+          </div>
+          <div class="field" style="align-self:end"><label class="toggle"><input type="checkbox" id="hidden"> Hidden network</label></div>
+        </div>
+        <div class="hint" style="margin:-4px 0 14px">Phones join the network when they scan it. Good for gym and lobby signs.</div>
+      </div>
+
+      <div data-pane="vcard" hidden>
+        <div class="row">
+          <div class="field"><label for="vName">Name</label><input type="text" id="vName" placeholder="Coach Name"></div>
+          <div class="field"><label for="vOrg">Organisation</label><input type="text" id="vOrg" value="Hoops College"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="vTitle">Title</label><input type="text" id="vTitle" placeholder="Head Coach"></div>
+          <div class="field"><label for="vPhone">Phone</label><input type="text" id="vPhone" placeholder="+1 555 123 4567"></div>
+        </div>
+        <div class="row">
+          <div class="field"><label for="vEmail">Email</label><input type="text" id="vEmail" placeholder="coach@hoopscollege.com"></div>
+          <div class="field"><label for="vUrl">Website</label><input type="text" id="vUrl" placeholder="https://hoopscollege.com"></div>
+        </div>
+        <div class="hint" style="margin:-4px 0 14px">Scanning saves the contact straight to the phone. Good for business cards and coach bios.</div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="format">Format</label>
+          <select id="format">
+            <option value="svg">SVG — vector, best for print</option>
+            <option value="png">PNG — raster</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="size">Size (px)</label>
+          <input type="number" id="size" value="1024" min="64" max="8192" step="64">
+          <div class="hint" id="sizeHint">Sets width/height; SVG stays scalable.</div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="dark">Foreground</label>
+          <input type="color" id="dark" value="#0B1F3A">
+        </div>
+        <div class="field">
+          <label for="light">Background</label>
+          <input type="color" id="light" value="#FFFFFF">
+        </div>
+      </div>
+
+      <details>
+        <summary>More options</summary>
+        <div class="row-3">
+          <div class="field">
+            <label for="ecLevel">Error correction</label>
+            <select id="ecLevel">
+              <option value="">M (default)</option>
+              <option value="L">L — least</option>
+              <option value="Q">Q</option>
+              <option value="H">H — most</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="margin">Quiet zone</label>
+            <input type="number" id="margin" value="4" min="0" max="32">
+          </div>
+          <div class="field">
+            <label for="logoScale">Logo scale</label>
+            <input type="number" id="logoScale" value="0.2" min="0.05" max="0.25" step="0.01">
+          </div>
+        </div>
+        <div class="field">
+          <label for="logo">Centre logo</label>
+          <input type="file" id="logo" accept=".svg,.png,.jpg,.jpeg,.webp,image/*">
+          <div class="hint">A logo forces error correction H, which lowers the payload limit to 1273 bytes. SVG logos keep the output pure vector.</div>
+        </div>
+      </details>
+
+      <div class="actions">
+        <button type="submit" id="go">Generate</button>
+        <button type="button" class="ghost" id="reset">Reset</button>
+      </div>
+    </form>
+
+    <div class="panel">
+      <div class="preview checker" id="preview">
+        <div class="placeholder">Your QR code will appear here.</div>
+      </div>
+      <div class="meta" id="meta"></div>
+      <div class="actions" id="outActions" hidden>
+        <button type="button" id="download">Download</button>
+        <button type="button" class="ghost" id="copy">Copy markup</button>
+      </div>
+      <div id="notes"></div>
+    </div>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, api, note, downloadBlob } = qrgenUI;
+  let current = null;   // { blob, filename, text }
+
+  // Byte capacity per error-correction level (QR version 40, byte mode).
+  const CAPACITY = { L: 2953, M: 2331, Q: 1663, H: 1273 };
+
+  function effectiveEc() {
+    if ($('logo').files.length) return 'H';
+    return $('ecLevel').value || 'M';
+  }
+
+  function updateCapacity() {
+    const bytes = new TextEncoder().encode($('data').value).length;
+    const ec = effectiveEc();
+    const limit = CAPACITY[ec];
+    const el = $('capacity');
+    if (!bytes) { el.textContent = ''; return; }
+    const over = bytes > limit;
+    el.innerHTML = `${bytes} / ${limit} bytes at level ${ec}` +
+      (over ? ' — <strong>too long, shorten the link</strong>' : '');
+    el.style.color = over ? 'var(--err-text)' : 'var(--muted)';
+  }
+
+  ['input', 'change'].forEach(evt => {
+    $('data').addEventListener(evt, updateCapacity);
+    $('ecLevel').addEventListener(evt, updateCapacity);
+    $('logo').addEventListener(evt, updateCapacity);
+  });
+
+  $('format').addEventListener('change', () => {
+    $('sizeHint').textContent = $('format').value === 'png'
+      ? 'Exact pixel dimensions of the PNG.'
+      : 'Sets width/height; SVG stays scalable.';
+  });
+
+  function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = () => reject(new Error('could not read the logo file'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  let kind = 'link';
+  document.querySelectorAll('[data-kind]').forEach((b) => b.addEventListener('click', () => {
+    kind = b.dataset.kind;
+    document.querySelectorAll('[data-kind]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', String(x === b)); });
+    document.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== kind; });
+  }));
+
+  const ENDPOINT = { link: '/generate', wifi: '/generate/wifi', vcard: '/generate/vcard' };
+
+  function contentFields() {
+    if (kind === 'wifi') {
+      return { ssid: $('ssid').value, password: $('wifiPass').value || undefined, encryption: $('encryption').value, hidden: $('hidden').checked };
+    }
+    if (kind === 'vcard') {
+      const v = { name: $('vName').value, org: $('vOrg').value, title: $('vTitle').value, phone: $('vPhone').value, email: $('vEmail').value, url: $('vUrl').value };
+      for (const k of Object.keys(v)) if (!v[k].trim()) delete v[k];
+      return v;
+    }
+    return { data: $('data').value };
+  }
+
+  function stemFor() {
+    const raw = kind === 'wifi' ? 'wifi-' + $('ssid').value : kind === 'vcard' ? 'contact-' + $('vName').value : $('data').value.replace(/^https?:\/\//, '');
+    return (raw.replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'qr').slice(0, 48);
+  }
+
+  async function buildBody() {
+    const body = {
+      ...contentFields(),
+      format: $('format').value,
+      size: Number($('size').value),
+      margin: Number($('margin').value),
+      dark: $('dark').value.toUpperCase(),
+      light: $('light').value.toUpperCase()
+    };
+    if ($('ecLevel').value) body.ecLevel = $('ecLevel').value;
+    const file = $('logo').files[0];
+    if (file) {
+      body.logo = await readFileAsDataUrl(file);
+      body.logoScale = Number($('logoScale').value);
+    }
+    return body;
+  }
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('notes').innerHTML = '';
+    $('go').disabled = true;
+    $('go').textContent = 'Generating…';
+
+    try {
+      if (kind === 'link' && !$('data').value.trim()) throw new Error('Enter a link or some text.');
+      const res = await api(ENDPOINT[kind], await buildBody());
+
+      const version = res.headers.get('x-qr-version');
+      const ec = res.headers.get('x-qr-ec-level');
+      const warning = res.headers.get('x-qr-warning');
+      const isSvg = $('format').value === 'svg';
+      const blob = await res.blob();
+
+      const stem = stemFor();
+      current = {
+        blob,
+        filename: `${stem}.${isSvg ? 'svg' : 'png'}`,
+        text: isSvg ? await blob.text() : null
+      };
+
+      if (isSvg) {
+        $('preview').innerHTML = current.text;
+      } else {
+        const img = new Image();
+        img.src = URL.createObjectURL(blob);
+        img.alt = 'Generated QR code';
+        $('preview').replaceChildren(img);
+      }
+
+      $('meta').innerHTML =
+        `<span>QR version <b>${version}</b></span>` +
+        `<span>EC level <b>${ec}</b></span>` +
+        `<span>Size <b>${(blob.size / 1024).toFixed(1)} KB</b></span>`;
+      $('outActions').hidden = false;
+      $('copy').hidden = !isSvg;
+
+      if (warning) warning.split(' | ').forEach(w => note($('notes'), 'warn', w));
+    } catch (err) {
+      $('preview').innerHTML = '<div class="placeholder">No output.</div>';
+      $('meta').innerHTML = '';
+      $('outActions').hidden = true;
+      note($('notes'), 'err', err.message);
+    } finally {
+      $('go').disabled = false;
+      $('go').textContent = 'Generate';
+    }
+  });
+
+  $('download').addEventListener('click', () => {
+    if (current) downloadBlob(current.blob, current.filename);
+  });
+
+  $('copy').addEventListener('click', async () => {
+    if (!current?.text) return;
+    await navigator.clipboard.writeText(current.text);
+    $('copy').textContent = 'Copied';
+    setTimeout(() => ($('copy').textContent = 'Copy markup'), 1400);
+  });
+
+  $('reset').addEventListener('click', () => {
+    $('form').reset();
+    $('dark').value = '#0B1F3A';
+    $('preview').innerHTML = '<div class="placeholder">Your QR code will appear here.</div>';
+    $('meta').innerHTML = '';
+    $('notes').innerHTML = '';
+    $('outActions').hidden = true;
+    current = null;
+    updateCapacity();
+  });
+
+  // The Link builder hands links over as ?data=…
+  const handed = new URLSearchParams(location.search).get('data');
+  if (handed) $('data').value = handed;
+  updateCapacity();
+})();
+</script>
+</body>
+</html>
