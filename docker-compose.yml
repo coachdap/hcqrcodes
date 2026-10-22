@@ -12,6 +12,8 @@ services:
       PORT: 3000
       HOST: 0.0.0.0
       QRGEN_LOGO_DIR: /output/logos
+      # Check-in events and the brand kit persist here, on the qrgen-output volume.
+      QRGEN_DATA_DIR: /output/data
     ports:
       # Loopback only — public traffic arrives via the Apache vhost on hc-new.
       - "127.0.0.1:${QRGEN_HOST_PORT:-3020}:3000"

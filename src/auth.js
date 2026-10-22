@@ -74,7 +74,8 @@ export function bearerAuth({ token, trustInternal }) {
       return next(
         Object.assign(new Error('QRGEN_TOKEN is not configured, so external requests cannot be authenticated.'), {
           status: 503,
-          code: 'AUTH_NOT_CONFIGURED'
+          code: 'AUTH_NOT_CONFIGURED',
+          expose: true
         })
       );
     }

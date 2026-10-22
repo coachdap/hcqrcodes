@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Compress photos · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .results { margin-top: 18px; }
+  .tbl-wrap { overflow-x: auto; }
+  table.list img.thumb { width: 44px; height: 44px; object-fit: cover; border-radius: 6px; display: block; }
+  table.list td.name { max-width: 170px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+  .summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+  .summary .grow { flex: 1; }
+  .big { font-size: 22px; font-weight: 700; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
+  .privacy { display: flex; gap: 10px; padding: 12px; border-radius: 8px; background: var(--soft); font-size: 13px; color: var(--muted); margin-top: 14px; }
+  .privacy b { color: var(--text); }
+  @media (max-width: 560px) { table.list .hide-sm { display: none; } }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="compress">
+  <header class="page">
+    <div>
+      <h1>Compress photos</h1>
+      <div class="sub">Make photos small enough for the website, email and social media without visible quality loss. Hidden data such as GPS location and camera details is removed too.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div>
+      <div class="drop" id="drop"></div>
+      <div id="queueWrap" class="results" hidden>
+        <div class="tbl-wrap"><table class="list" id="table"></table></div>
+        <div class="summary">
+          <span class="big" id="saved"></span>
+          <span class="muted" id="totals"></span>
+          <span class="grow"></span>
+          <button type="button" class="ghost small" id="clear">Clear</button>
+          <button type="button" class="small" id="zipAll" disabled>Download all (zip)</button>
+        </div>
+      </div>
+      <div id="notes"></div>
+    </div>
+
+    <form class="panel sticky" id="form">
+      <div class="field">
+        <label>Longest side</label>
+        <div class="seg full" id="edgeSeg">
+          <button type="button" data-e="0">Original</button>
+          <button type="button" data-e="3840">3840</button>
+          <button type="button" data-e="2560" class="on">2560</button>
+          <button type="button" data-e="1920">1920</button>
+          <button type="button" data-e="1280">1280</button>
+        </div>
+        <div class="hint">2560 px suits websites and social. 1280 px is plenty for email. Images are never enlarged.</div>
+      </div>
+
+      <div class="field">
+        <div class="rangehead"><label for="quality">Quality</label><b id="qualityVal">78 · balanced</b></div>
+        <input type="range" id="quality" min="40" max="95" value="78">
+      </div>
+
+      <div class="field">
+        <label for="format">Format</label>
+        <select id="format">
+          <option value="same">Keep the same format</option>
+          <option value="jpeg">JPG (works everywhere)</option>
+          <option value="webp">WebP (smaller, for websites)</option>
+          <option value="avif">AVIF (smallest, newer apps only)</option>
+        </select>
+      </div>
+
+      <div class="actions">
+        <button type="submit" id="go" disabled>Compress</button>
+      </div>
+
+      <div class="privacy">
+        <span aria-hidden="true">🔒</span>
+        <span><b>Private by default.</b> Phone photos carry hidden details: where they were taken, when, and on what device. All of it is stripped, and the picture is turned the right way up.</span>
+      </div>
+    </form>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, upload, note, toast, formatBytes, downloadBlob, filenameFrom, zip, escapeHtml, dropzone, dropMarkup } = qrgenUI;
+  const items = [];
+  let edge = 2560;
+  let running = false;
+
+  $('drop').innerHTML = dropMarkup('Drop photos here', 'or click to choose. JPG, PNG, WebP or AVIF, up to 25 MB each. Drop a whole batch at once.');
+  dropzone($('drop'), { accept: 'image/*,.jpg,.jpeg,.png,.webp,.avif,.gif,.tif,.tiff,.heic,.heif', multiple: true, paste: true, onFiles: (files) => {
+    for (const file of files) items.push({ file, status: 'ready', thumb: /\.(tiff?|heic|heif)$/i.test(file.name) ? '' : URL.createObjectURL(file) });
+    render();
+  } });
+
+  function render() {
+    $('queueWrap').hidden = !items.length;
+    $('go').disabled = running || !items.some((i) => i.status === 'ready');
+    $('table').innerHTML = '<thead><tr><th></th><th>Photo</th><th class="hide-sm">Before</th><th>After</th><th></th></tr></thead><tbody>' +
+      items.map((it, i) => {
+        const r = it.result;
+        let after = '<span class="pill">Ready</span>';
+        if (it.status === 'working') after = '<span class="pill">Working…</span>';
+        if (it.status === 'error') after = `<span class="pill bad" title="${escapeHtml(it.error)}">Failed</span>`;
+        if (r) {
+          const pct = Math.round((1 - r.blob.size / it.file.size) * 100);
+          after = `${formatBytes(r.blob.size)} ${pct > 0 ? `<span class="pill good">−${pct}%</span>` : '<span class="pill">no smaller</span>'}` +
+            (r.location ? ' <span class="pill warn" title="This photo contained the GPS location where it was taken. It has been removed.">GPS removed</span>' : '');
+        }
+        return `<tr><td>${it.thumb ? `<img class="thumb" src="${it.thumb}" alt="">` : ''}</td>` +
+          `<td class="name" title="${escapeHtml(it.file.name)}">${escapeHtml(r ? r.name : it.file.name)}</td>` +
+          `<td class="num hide-sm">${formatBytes(it.file.size)}</td><td class="num">${after}${r ? `<div class="muted" style="font-size:11.5px">${r.width}×${r.height}</div>` : ''}</td>` +
+          `<td style="white-space:nowrap">${r ? `<button type="button" class="small" data-dl="${i}">Download</button>` : ''}<button type="button" class="iconbtn" data-rm="${i}" aria-label="Remove">✕</button></td></tr>`;
+      }).join('') + '</tbody>';
+    $('table').querySelectorAll('[data-dl]').forEach((b) => b.addEventListener('click', () => { const r = items[b.dataset.dl].result; downloadBlob(r.blob, r.name); }));
+    $('table').querySelectorAll('[data-rm]').forEach((b) => b.addEventListener('click', () => { if (running) return; items.splice(Number(b.dataset.rm), 1); render(); }));
+
+    const done = items.filter((i) => i.result);
+    $('zipAll').disabled = !done.length;
+    const before = done.reduce((a, i) => a + i.file.size, 0);
+    const after = done.reduce((a, i) => a + i.result.blob.size, 0);
+    const gps = done.filter((i) => i.result.location).length;
+    $('saved').textContent = done.length && before > after ? `−${Math.round((1 - after / before) * 100)}%` : '';
+    $('totals').textContent = done.length
+      ? `${formatBytes(before)} → ${formatBytes(after)} across ${done.length} photo${done.length === 1 ? '' : 's'}${gps ? ` · location removed from ${gps}` : ''}`
+      : `${items.length} photo${items.length === 1 ? '' : 's'} ready`;
+  }
+
+  function qualityLabel() {
+    const q = Number($('quality').value);
+    $('qualityVal').textContent = `${q} · ${q < 60 ? 'smallest' : q < 72 ? 'small' : q < 85 ? 'balanced' : 'high'}`;
+  }
+
+  document.querySelectorAll('#edgeSeg button').forEach((b) => b.addEventListener('click', () => {
+    edge = Number(b.dataset.e);
+    document.querySelectorAll('#edgeSeg button').forEach((x) => x.classList.toggle('on', x === b));
+    reset();
+  }));
+  $('quality').addEventListener('input', qualityLabel);
+  $('form').addEventListener('input', reset);
+
+  // New settings: let the same photos be compressed again.
+  function reset() {
+    if (running) return;
+    for (const it of items) if (it.result || it.status === 'error') { it.result = null; it.status = 'ready'; }
+    render();
+  }
+
+  $('form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (running) return;
+    running = true;
+    $('notes').innerHTML = '';
+    $('go').textContent = 'Compressing…';
+    for (const it of items.filter((i) => i.status === 'ready')) {
+      it.status = 'working';
+      render();
+      const form = new FormData();
+      form.append('files', it.file);
+      form.append('quality', $('quality').value);
+      form.append('maxEdge', String(edge));
+      form.append('format', $('format').value);
+      try {
+        const res = await upload('/image/compress', form);
+        it.result = {
+          blob: await res.blob(),
+          name: filenameFrom(res, it.file.name),
+          width: res.headers.get('x-image-width'),
+          height: res.headers.get('x-image-height'),
+          location: res.headers.get('x-had-location') === 'true'
+        };
+        it.status = 'done';
+      } catch (err) {
+        it.status = 'error';
+        it.error = err.message.replace(/<[^>]+>/g, ' ');
+        note($('notes'), 'err', `<b>${escapeHtml(it.file.name)}</b>: ${err.message}`);
+        if (/token/i.test(err.message)) { it.status = 'ready'; break; }
+      }
+      render();
+    }
+    running = false;
+    $('go').textContent = 'Compress';
+    render();
+    const ok = items.filter((i) => i.result).length;
+    if (ok) toast(`${ok} photo${ok === 1 ? '' : 's'} compressed`);
+  });
+
+  $('zipAll').addEventListener('click', async () => {
+    const done = items.filter((i) => i.result);
+    if (done.length === 1) return downloadBlob(done[0].result.blob, done[0].result.name);
+    downloadBlob(await zip(done.map((i) => ({ name: i.result.name, blob: i.result.blob }))), 'compressed-photos.zip');
+  });
+  $('clear').addEventListener('click', () => { if (running) return; items.length = 0; $('notes').innerHTML = ''; render(); });
+
+  qualityLabel();
+})();
+</script>
+</body>
+</html>

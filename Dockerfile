@@ -3,7 +3,8 @@ FROM node:22-slim
 ENV NODE_ENV=production \
     PORT=3000 \
     HOST=0.0.0.0 \
-    QRGEN_LOGO_DIR=/output/logos
+    QRGEN_LOGO_DIR=/output/logos \
+    QRGEN_DATA_DIR=/output/data
 
 WORKDIR /app
 
@@ -11,8 +12,16 @@ WORKDIR /app
 # slim image has none. Liberation covers Arial/Helvetica/Times/Courier by metric
 # and DejaVu the generic families, which is enough for flyer and logo SVGs.
 # Convert text to outlines in the source for exact fidelity.
+#
+# The other utilities shell out to:
+#   ffmpeg          video tools (compress, GIF, thumbnails, MP3)
+#   poppler-utils   pdftoppm: PDF → images, flyer PNG/preview rendering
+#   ghostscript     PDF compression
+#   fonts-inter     typeface for flyers, name tags and rosters (Helvetica otherwise)
 RUN apt-get update \
-  && apt-get install -y --no-install-recommends fonts-liberation fonts-dejavu-core \
+  && apt-get install -y --no-install-recommends \
+       fonts-liberation fonts-dejavu-core fonts-inter \
+       ffmpeg poppler-utils ghostscript \
   && rm -rf /var/lib/apt/lists/*
 
 # Dependencies first, so source edits don't invalidate the install layer.
@@ -28,7 +37,8 @@ COPY public ./public
 COPY client.js ./client.js
 
 # node:22-slim ships an unprivileged `node` user (uid 1000); run as it, not root.
-RUN mkdir -p /output/logos && chown -R node:node /output /app
+# /output/data holds the check-in events and the brand kit.
+RUN mkdir -p /output/logos /output/data && chown -R node:node /output /app
 USER node
 
 EXPOSE 3000

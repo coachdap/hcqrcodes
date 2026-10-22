@@ -143,6 +143,9 @@ const UNSAFE_ELEMENT_RE = /<\s*(script|iframe|object|embed|foreignObject)\b/i;
 const EXTERNAL_HREF_RE = /<\s*([a-zA-Z][\w:-]*)\b[^>]*?\s(?:xlink:)?href\s*=\s*["']\s*(?:https?|file|ftp|javascript):/gi;
 const EXTERNAL_URL_RE = /url\(\s*["']?\s*(?:https?|file|ftp):/i;
 
+/** Reject SVGs that script or reach out; shared with the other image tools. */
+export { prepareSvg as assertSafeSvg };
+
 function prepareSvg(svg) {
   const markup = svg.replace(/^\uFEFF/, '');
   if (!/<svg[\s>]/i.test(markup) || /<\s*(html|body)[\s>]/i.test(markup)) {

@@ -3,260 +3,73 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>qrgen</title>
+<title>Utilities · Hoops College</title>
 <link rel="stylesheet" href="/ui/shared.css">
 <style>
-  .preview { display: flex; align-items: center; justify-content: center; min-height: 300px; padding: 18px; border-radius: 8px; }
-  .preview svg, .preview img { width: 100%; height: auto; max-width: 340px; display: block; }
+  .hero { display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+  .hero h1 { font-size: 26px; letter-spacing: -0.02em; }
+  .hero .sub { font-size: 14.5px; max-width: 560px; }
+  .find { width: min(320px, 100%); }
+  .empty { margin-top: 30px; color: var(--muted); }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="masthead">
-    <a class="brand" href="/ui">qrgen <small>Hoops College &amp; Chase Excellence</small></a>
-    <nav class="nav" aria-label="Tools">
-      <a href="/ui" aria-current="page">QR code</a>
-      <a href="/ui/utilities">Utilities</a>
-    </nav>
-  </header>
-
-  <header class="page">
-    <h1>QR code</h1>
-    <div class="sub">Print-ready QR codes for flyers, signage, jersey tags and registration links.</div>
-  </header>
-
-  <div class="grid">
-    <form class="panel" id="form">
-      <div class="field">
-        <label for="data">Link or text</label>
-        <input type="text" id="data" placeholder="https://hoopscollege.com/tryouts" autocomplete="off" required>
-        <div class="hint" id="capacity"></div>
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label for="format">Format</label>
-          <select id="format">
-            <option value="svg">SVG — vector, best for print</option>
-            <option value="png">PNG — raster</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="size">Size (px)</label>
-          <input type="number" id="size" value="1024" min="64" max="8192" step="64">
-          <div class="hint" id="sizeHint">Sets width/height; SVG stays scalable.</div>
-        </div>
-      </div>
-
-      <div class="row">
-        <div class="field">
-          <label for="dark">Foreground</label>
-          <input type="color" id="dark" value="#0B1F3A">
-        </div>
-        <div class="field">
-          <label for="light">Background</label>
-          <input type="color" id="light" value="#FFFFFF">
-        </div>
-      </div>
-
-      <details>
-        <summary>More options</summary>
-        <div class="row-3">
-          <div class="field">
-            <label for="ecLevel">Error correction</label>
-            <select id="ecLevel">
-              <option value="">M (default)</option>
-              <option value="L">L — least</option>
-              <option value="Q">Q</option>
-              <option value="H">H — most</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="margin">Quiet zone</label>
-            <input type="number" id="margin" value="4" min="0" max="32">
-          </div>
-          <div class="field">
-            <label for="logoScale">Logo scale</label>
-            <input type="number" id="logoScale" value="0.2" min="0.05" max="0.25" step="0.01">
-          </div>
-        </div>
-        <div class="field">
-          <label for="logo">Centre logo</label>
-          <input type="file" id="logo" accept=".svg,.png,.jpg,.jpeg,.webp,image/*">
-          <div class="hint">A logo forces error correction H, which lowers the payload limit to 1273 bytes. SVG logos keep the output pure vector.</div>
-        </div>
-      </details>
-
-      <div class="field" id="tokenField" hidden>
-        <div class="tokenbar">
-          <div class="field">
-            <label for="token">API token</label>
-            <input type="password" id="token" placeholder="required from outside hc-internal" autocomplete="off">
-          </div>
-          <button type="button" class="ghost" id="saveToken">Remember</button>
-        </div>
-        <div class="hint" id="tokenHint">Stored in this browser only.</div>
-      </div>
-
-      <div class="actions">
-        <button type="submit" id="go">Generate</button>
-        <button type="button" class="ghost" id="reset">Reset</button>
-      </div>
-    </form>
-
-    <div class="panel">
-      <div class="preview checker" id="preview">
-        <div class="placeholder">Your QR code will appear here.</div>
-      </div>
-      <div class="meta" id="meta"></div>
-      <div class="actions" id="outActions" hidden>
-        <button type="button" id="download">Download</button>
-        <button type="button" class="ghost" id="copy">Copy markup</button>
-      </div>
-      <div id="notes"></div>
+<main class="wrap" data-tool="home">
+  <div class="hero">
+    <div>
+      <h1>Utilities</h1>
+      <div class="sub">Everyday tools for Hoops College and Chase Excellence: QR codes, images, flyers, name tags, check-in, PDFs and video. Everything runs on our own server, and nothing is sent to outside services.</div>
     </div>
+    <input type="text" class="find" id="find" placeholder="Find a tool…" aria-label="Find a tool" autocomplete="off">
   </div>
-</div>
+  <div id="groups"></div>
+  <div class="empty" id="empty" hidden>No tool matches that. Try “photo”, “pdf” or “badge”.</div>
+</main>
 
 <script src="/ui/shared.js"></script>
 <script>
 (function () {
-  const { $, api, note, downloadBlob } = qrgenUI;
-  let current = null;   // { blob, filename, text }
+  const { $, TOOLS, icon, escapeHtml } = qrgenUI;
 
-  // Byte capacity per error-correction level (QR version 40, byte mode).
-  const CAPACITY = { L: 2953, M: 2331, Q: 1663, H: 1273 };
+  // Extra words people search with that aren't in a tool's name or blurb.
+  const KEYWORDS = {
+    qr: 'wifi contact vcard scan code',
+    links: 'utm tracking campaign analytics url',
+    svg: 'vector logo crop webp png',
+    convert: 'jpg jpeg png webp avif heic resize format',
+    social: 'instagram facebook twitter x youtube tiktok story banner resize crop',
+    compress: 'shrink smaller optimize gps exif privacy photo',
+    favicon: 'icon website app apple touch manifest',
+    flyer: 'poster graphic event camp tryouts print social',
+    tags: 'badge label jersey bag avery roster sign-in sheet name',
+    checkin: 'attendance scan door event camp scanner',
+    pdf: 'merge combine split compress waiver scan pages images',
+    video: 'mp4 gif clip highlight compress thumbnail mp3 audio',
+    brand: 'logo colours colors fonts palette'
+  };
 
-  function effectiveEc() {
-    if ($('logo').files.length) return 'H';
-    return $('ecLevel').value || 'M';
+  function render(query) {
+    const q = query.trim().toLowerCase();
+    let shown = 0;
+    $('groups').innerHTML = TOOLS.map((g) => {
+      const items = g.items.filter((t) => !q || `${t.name} ${t.desc} ${KEYWORDS[t.slug] || ''}`.toLowerCase().includes(q));
+      shown += items.length;
+      if (!items.length) return '';
+      return `<section class="home-group"><h2>${escapeHtml(g.group)}</h2><div class="cards">` +
+        items.map((t) => `<a class="card" href="/ui/${t.slug}"><span class="ico">${icon(t.icon)}</span><span><b>${escapeHtml(t.name)}</b><span>${escapeHtml(t.desc)}</span></span></a>`).join('') +
+        '</div></section>';
+    }).join('');
+    $('empty').hidden = shown > 0;
   }
 
-  function updateCapacity() {
-    const bytes = new TextEncoder().encode($('data').value).length;
-    const ec = effectiveEc();
-    const limit = CAPACITY[ec];
-    const el = $('capacity');
-    if (!bytes) { el.textContent = ''; return; }
-    const over = bytes > limit;
-    el.innerHTML = `${bytes} / ${limit} bytes at level ${ec}` +
-      (over ? ' — <strong>too long, shorten the link</strong>' : '');
-    el.style.color = over ? 'var(--err-text)' : 'var(--muted)';
-  }
-
-  ['input', 'change'].forEach(evt => {
-    $('data').addEventListener(evt, updateCapacity);
-    $('ecLevel').addEventListener(evt, updateCapacity);
-    $('logo').addEventListener(evt, updateCapacity);
+  $('find').addEventListener('input', (e) => render(e.target.value));
+  $('find').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { const first = document.querySelector('.card'); if (first) location.href = first.href; }
   });
-
-  $('format').addEventListener('change', () => {
-    $('sizeHint').textContent = $('format').value === 'png'
-      ? 'Exact pixel dimensions of the PNG.'
-      : 'Sets width/height; SVG stays scalable.';
+  document.addEventListener('keydown', (e) => {
+    if (e.key === '/' && document.activeElement?.tagName !== 'INPUT') { e.preventDefault(); $('find').focus(); }
   });
-
-  function readFileAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-      const r = new FileReader();
-      r.onload = () => resolve(r.result);
-      r.onerror = () => reject(new Error('could not read the logo file'));
-      r.readAsDataURL(file);
-    });
-  }
-
-  async function buildBody() {
-    const body = {
-      data: $('data').value,
-      format: $('format').value,
-      size: Number($('size').value),
-      margin: Number($('margin').value),
-      dark: $('dark').value.toUpperCase(),
-      light: $('light').value.toUpperCase()
-    };
-    if ($('ecLevel').value) body.ecLevel = $('ecLevel').value;
-    const file = $('logo').files[0];
-    if (file) {
-      body.logo = await readFileAsDataUrl(file);
-      body.logoScale = Number($('logoScale').value);
-    }
-    return body;
-  }
-
-  $('form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    $('notes').innerHTML = '';
-    $('go').disabled = true;
-    $('go').textContent = 'Generating…';
-
-    try {
-      const res = await api('/generate', await buildBody());
-
-      const version = res.headers.get('x-qr-version');
-      const ec = res.headers.get('x-qr-ec-level');
-      const warning = res.headers.get('x-qr-warning');
-      const isSvg = $('format').value === 'svg';
-      const blob = await res.blob();
-
-      const stem = ($('data').value.replace(/^https?:\/\//, '').replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '') || 'qr').slice(0, 48);
-      current = {
-        blob,
-        filename: `${stem}.${isSvg ? 'svg' : 'png'}`,
-        text: isSvg ? await blob.text() : null
-      };
-
-      if (isSvg) {
-        $('preview').innerHTML = current.text;
-      } else {
-        const img = new Image();
-        img.src = URL.createObjectURL(blob);
-        img.alt = 'Generated QR code';
-        $('preview').replaceChildren(img);
-      }
-
-      $('meta').innerHTML =
-        `<span>QR version <b>${version}</b></span>` +
-        `<span>EC level <b>${ec}</b></span>` +
-        `<span>Size <b>${(blob.size / 1024).toFixed(1)} KB</b></span>`;
-      $('outActions').hidden = false;
-      $('copy').hidden = !isSvg;
-
-      if (warning) warning.split(' | ').forEach(w => note($('notes'), 'warn', w));
-    } catch (err) {
-      $('preview').innerHTML = '<div class="placeholder">No output.</div>';
-      $('meta').innerHTML = '';
-      $('outActions').hidden = true;
-      note($('notes'), 'err', err.message);
-    } finally {
-      $('go').disabled = false;
-      $('go').textContent = 'Generate';
-    }
-  });
-
-  $('download').addEventListener('click', () => {
-    if (current) downloadBlob(current.blob, current.filename);
-  });
-
-  $('copy').addEventListener('click', async () => {
-    if (!current?.text) return;
-    await navigator.clipboard.writeText(current.text);
-    $('copy').textContent = 'Copied';
-    setTimeout(() => ($('copy').textContent = 'Copy markup'), 1400);
-  });
-
-  $('reset').addEventListener('click', () => {
-    $('form').reset();
-    $('dark').value = '#0B1F3A';
-    $('preview').innerHTML = '<div class="placeholder">Your QR code will appear here.</div>';
-    $('meta').innerHTML = '';
-    $('notes').innerHTML = '';
-    $('outActions').hidden = true;
-    current = null;
-    updateCapacity();
-  });
-
-  qrgenUI.initToken();
-  updateCapacity();
+  render('');
 })();
 </script>
 </body>

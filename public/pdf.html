@@ -1,0 +1,410 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PDF tools · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .tabs { margin-bottom: 18px; max-width: 100%; }
+  .tabs button { white-space: nowrap; }
+  .files { margin-top: 14px; }
+  .files li[draggable="true"] { cursor: grab; }
+  .files li.dragging { opacity: .45; }
+  .files li.drop-before { box-shadow: inset 0 2px 0 var(--accent); }
+  .files .order { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 12px; width: 18px; text-align: right; flex: none; }
+  .files .kind { flex: none; }
+  .files .moves { display: flex; gap: 2px; flex: none; }
+  .result { margin-top: 16px; padding: 14px; border: 1px solid var(--line); border-radius: 9px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .result .what { flex: 1; min-width: 180px; font-size: 13.5px; }
+  .result .what b { display: block; font-size: 14px; overflow-wrap: anywhere; }
+  .saving { font-size: 26px; font-weight: 700; letter-spacing: -.02em; }
+  .pane-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 340px); gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .pane-grid { grid-template-columns: minmax(0, 1fr); } }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="pdf">
+  <header class="page">
+    <div>
+      <h1>PDF tools</h1>
+      <div class="sub">Merge waivers and packets, pull out pages, shrink big scans for email, and turn pages into images (or photos into a PDF).</div>
+    </div>
+  </header>
+
+  <div class="seg tabs" role="tablist" aria-label="PDF tool">
+    <button type="button" role="tab" data-tab="merge">Merge</button>
+    <button type="button" role="tab" data-tab="split">Split &amp; extract</button>
+    <button type="button" role="tab" data-tab="compress">Compress</button>
+    <button type="button" role="tab" data-tab="to-images">PDF → images</button>
+    <button type="button" role="tab" data-tab="from-images">Images → PDF</button>
+  </div>
+
+  <!-- Merge ------------------------------------------------------------- -->
+  <section data-pane="merge" hidden>
+    <div class="pane-grid">
+      <div>
+        <div class="drop compact" id="mergeDrop"></div>
+        <ul class="files" id="mergeList" hidden></ul>
+      </div>
+      <div class="panel">
+        <div class="section">Merge</div>
+        <p class="hint" style="margin-top:0">Files are joined top to bottom. Drag rows or use the arrows to change the order. Images become one page each.</p>
+        <div class="field">
+          <label for="mergePage">Page size for images</label>
+          <select id="mergePage"><option value="letter">Letter</option><option value="a4">A4</option></select>
+        </div>
+        <div class="actions"><button type="button" id="mergeGo" disabled>Merge files</button></div>
+        <div id="mergeOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Split -------------------------------------------------------------- -->
+  <section data-pane="split" hidden>
+    <div class="pane-grid">
+      <div>
+        <div class="drop compact" id="splitDrop"></div>
+        <ul class="files" id="splitFile" hidden></ul>
+      </div>
+      <div class="panel">
+        <div class="section">Split &amp; extract</div>
+        <div class="field">
+          <div class="seg full" role="group" aria-label="Split mode">
+            <button type="button" class="on" data-split="ranges">Pick pages</button>
+            <button type="button" data-split="each">Every page</button>
+          </div>
+        </div>
+        <div id="rangeFields">
+          <div class="field">
+            <label for="ranges">Pages</label>
+            <input type="text" id="ranges" placeholder="1-3, 5, 8-" autocomplete="off">
+            <div class="hint">Commas separate pieces. <code>1-3</code> is pages 1 to 3, <code>5</code> is just page 5, <code>8-</code> is page 8 to the end.</div>
+          </div>
+          <div class="field"><label class="toggle"><input type="checkbox" id="combine"> Put all chosen pages in one PDF</label>
+            <div class="hint">Off: each piece becomes its own PDF (downloaded as a ZIP).</div></div>
+        </div>
+        <div class="field">
+          <label for="rotate">Rotate pages</label>
+          <select id="rotate"><option value="0">Don't rotate</option><option value="90">90° clockwise</option><option value="180">180°</option><option value="270">90° counter-clockwise</option></select>
+        </div>
+        <div class="actions"><button type="button" id="splitGo" disabled>Split PDF</button></div>
+        <div id="splitOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Compress ------------------------------------------------------------ -->
+  <section data-pane="compress" hidden>
+    <div class="pane-grid">
+      <div>
+        <div class="drop compact" id="compressDrop"></div>
+        <ul class="files" id="compressFile" hidden></ul>
+      </div>
+      <div class="panel">
+        <div class="section">Compress</div>
+        <div class="field">
+          <label>How small?</label>
+          <div class="seg full" role="group" aria-label="Compression level">
+            <button type="button" data-level="small">Smallest</button>
+            <button type="button" class="on" data-level="balanced">Balanced</button>
+            <button type="button" data-level="print">Print quality</button>
+          </div>
+          <div class="hint" id="levelHint"></div>
+        </div>
+        <div class="actions"><button type="button" id="compressGo" disabled>Compress PDF</button></div>
+        <div id="compressOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- PDF → images -------------------------------------------------------- -->
+  <section data-pane="to-images" hidden>
+    <div class="pane-grid">
+      <div>
+        <div class="drop compact" id="toImgDrop"></div>
+        <ul class="files" id="toImgFile" hidden></ul>
+      </div>
+      <div class="panel">
+        <div class="section">PDF → images</div>
+        <div class="row">
+          <div class="field">
+            <label for="imgFormat">Format</label>
+            <select id="imgFormat"><option value="png">PNG (sharp text)</option><option value="jpeg">JPG (smaller)</option></select>
+          </div>
+          <div class="field">
+            <label for="dpi">Resolution</label>
+            <select id="dpi"><option value="72">72 dpi (screen)</option><option value="150" selected>150 dpi (social)</option><option value="300">300 dpi (print)</option></select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="imgPages">Pages <span class="muted" style="font-weight:500">(optional)</span></label>
+          <input type="text" id="imgPages" placeholder="all pages, or e.g. 1-2, 5" autocomplete="off">
+        </div>
+        <div class="actions"><button type="button" id="toImgGo" disabled>Make images</button></div>
+        <div id="toImgOut"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Images → PDF --------------------------------------------------------- -->
+  <section data-pane="from-images" hidden>
+    <div class="pane-grid">
+      <div>
+        <div class="drop compact" id="fromImgDrop"></div>
+        <ul class="files" id="fromImgList" hidden></ul>
+      </div>
+      <div class="panel">
+        <div class="section">Images → PDF</div>
+        <p class="hint" style="margin-top:0">One image per page, in list order. Handy for turning phone photos of forms into a single PDF.</p>
+        <div class="row">
+          <div class="field">
+            <label for="fromPage">Page size</label>
+            <select id="fromPage"><option value="letter">Letter</option><option value="a4">A4</option><option value="fit">Same as each image</option></select>
+          </div>
+          <div class="field" id="marginField">
+            <label for="margin">Margin</label>
+            <select id="margin"><option value="0">None</option><option value="18">¼ inch</option><option value="36" selected>½ inch</option><option value="72">1 inch</option></select>
+          </div>
+        </div>
+        <div class="actions"><button type="button" id="fromImgGo" disabled>Make PDF</button></div>
+        <div id="fromImgOut"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, upload, dropzone, dropMarkup, note, formatBytes, downloadBlob, filenameFrom, escapeHtml, busy, toast } = qrgenUI;
+
+  // --- tabs (remembered in the URL hash) -----------------------------------------
+  const TABS = ['merge', 'split', 'compress', 'to-images', 'from-images'];
+  function show(tab) {
+    if (!TABS.includes(tab)) tab = 'merge';
+    document.querySelectorAll('[data-tab]').forEach((b) => {
+      b.classList.toggle('on', b.dataset.tab === tab);
+      b.setAttribute('aria-selected', String(b.dataset.tab === tab));
+    });
+    document.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== tab; });
+  }
+  document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+    history.replaceState(null, '', '#' + b.dataset.tab);
+    show(b.dataset.tab);
+  }));
+  window.addEventListener('hashchange', () => show(location.hash.slice(1)));
+  show(location.hash.slice(1));
+
+  const isPdf = (f) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+
+  // --- ordered file lists (merge, images → PDF) -----------------------------------
+  function orderedList(listEl, onChange) {
+    let files = [];
+    let dragFrom = null;
+    function render() {
+      listEl.hidden = !files.length;
+      listEl.innerHTML = files.map((f, i) => `
+        <li draggable="true" data-i="${i}">
+          <span class="order">${i + 1}</span>
+          <span class="pill kind">${isPdf(f) ? 'PDF' : 'IMG'}</span>
+          <span class="name" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</span>
+          <span class="size">${formatBytes(f.size)}</span>
+          <span class="moves">
+            <button type="button" class="iconbtn" data-act="up" aria-label="Move up"${i === 0 ? ' disabled' : ''}>↑</button>
+            <button type="button" class="iconbtn" data-act="down" aria-label="Move down"${i === files.length - 1 ? ' disabled' : ''}>↓</button>
+            <button type="button" class="iconbtn" data-act="remove" aria-label="Remove">✕</button>
+          </span>
+        </li>`).join('');
+      onChange(files);
+    }
+    listEl.addEventListener('click', (e) => {
+      const btn = e.target.closest('button[data-act]');
+      if (!btn) return;
+      const i = Number(btn.closest('li').dataset.i);
+      if (btn.dataset.act === 'remove') files.splice(i, 1);
+      if (btn.dataset.act === 'up' && i > 0) [files[i - 1], files[i]] = [files[i], files[i - 1]];
+      if (btn.dataset.act === 'down' && i < files.length - 1) [files[i + 1], files[i]] = [files[i], files[i + 1]];
+      render();
+    });
+    listEl.addEventListener('dragstart', (e) => {
+      const li = e.target.closest('li');
+      if (!li) return;
+      dragFrom = Number(li.dataset.i);
+      li.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+    });
+    listEl.addEventListener('dragover', (e) => {
+      if (dragFrom === null) return;
+      e.preventDefault();
+      listEl.querySelectorAll('.drop-before').forEach((x) => x.classList.remove('drop-before'));
+      e.target.closest('li')?.classList.add('drop-before');
+    });
+    listEl.addEventListener('drop', (e) => {
+      if (dragFrom === null) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const li = e.target.closest('li');
+      const to = li ? Number(li.dataset.i) : files.length - 1;
+      const [moved] = files.splice(dragFrom, 1);
+      files.splice(to > dragFrom ? to - 1 : to, 0, moved);
+      dragFrom = null;
+      render();
+    });
+    listEl.addEventListener('dragend', () => { dragFrom = null; render(); });
+    return {
+      add(list) { files.push(...list); render(); },
+      get files() { return files; },
+      clear() { files = []; render(); }
+    };
+  }
+
+  // A single chosen file shown as a one-row list with a remove button.
+  function singleFile(listEl, onChange) {
+    let file = null;
+    function render() {
+      listEl.hidden = !file;
+      listEl.innerHTML = file ? `<li><span class="pill kind">PDF</span><span class="name">${escapeHtml(file.name)}</span><span class="size">${formatBytes(file.size)}</span><button type="button" class="iconbtn" aria-label="Remove">✕</button></li>` : '';
+      onChange(file);
+    }
+    listEl.addEventListener('click', (e) => { if (e.target.closest('button')) { file = null; render(); } });
+    return { set(f) { file = f; render(); }, get file() { return file; } };
+  }
+
+  // --- results ---------------------------------------------------------------------
+  function showResult(out, blob, filename, extraHtml = '') {
+    out.innerHTML = '';
+    const box = document.createElement('div');
+    box.className = 'result';
+    box.innerHTML = `<div class="what"><b>${escapeHtml(filename)}</b>${formatBytes(blob.size)}${extraHtml}</div><button type="button" class="small">Download</button>`;
+    box.querySelector('button').addEventListener('click', () => downloadBlob(blob, filename));
+    out.appendChild(box);
+    downloadBlob(blob, filename);
+  }
+
+  async function run(button, label, out, path, form, fallbackName, describe) {
+    out.innerHTML = '';
+    await busy(button, label, async () => {
+      try {
+        const res = await upload(path, form);
+        const blob = await res.blob();
+        const name = filenameFrom(res, fallbackName);
+        showResult(out, blob, name, describe ? describe(res, blob) : '');
+      } catch (err) {
+        note(out, 'err', err.message);
+      }
+    });
+  }
+
+  // --- merge -----------------------------------------------------------------------
+  $('mergeDrop').innerHTML = dropMarkup('Add PDFs or images', 'Drop files here or click to choose. Add more any time.');
+  const merge = orderedList($('mergeList'), (files) => {
+    $('mergeGo').disabled = files.length < 1;
+    $('mergeGo').textContent = files.length > 1 ? `Merge ${files.length} files` : 'Merge files';
+  });
+  dropzone($('mergeDrop'), { accept: '.pdf,application/pdf,image/*', multiple: true, onFiles: (f) => merge.add(f) });
+  $('mergeGo').addEventListener('click', () => {
+    if (merge.files.length < 2 && isPdf(merge.files[0])) return toast('Add at least one more file to merge.');
+    const form = new FormData();
+    merge.files.forEach((f) => form.append('files', f));
+    form.append('pageSize', $('mergePage').value);
+    run($('mergeGo'), 'Merging…', $('mergeOut'), '/pdf/merge', form, 'merged.pdf');
+  });
+
+  // --- split -----------------------------------------------------------------------
+  let splitMode = 'ranges';
+  $('splitDrop').innerHTML = dropMarkup('Choose a PDF', 'Drop it here or click to choose.');
+  const split = singleFile($('splitFile'), (f) => { $('splitGo').disabled = !f; $('splitOut').innerHTML = ''; });
+  dropzone($('splitDrop'), { accept: '.pdf,application/pdf', onFiles: ([f]) => split.set(f) });
+  document.querySelectorAll('[data-split]').forEach((b) => b.addEventListener('click', () => {
+    splitMode = b.dataset.split;
+    document.querySelectorAll('[data-split]').forEach((x) => x.classList.toggle('on', x === b));
+    $('rangeFields').hidden = splitMode !== 'ranges';
+  }));
+  $('splitGo').addEventListener('click', () => {
+    const out = $('splitOut');
+    if (splitMode === 'ranges' && !$('ranges').value.trim()) { out.innerHTML = ''; note(out, 'err', 'Enter the pages you want, for example <code>1-3, 5</code>.'); return; }
+    const form = new FormData();
+    form.append('files', split.file);
+    form.append('mode', splitMode);
+    form.append('ranges', $('ranges').value);
+    form.append('combine', String($('combine').checked));
+    form.append('rotate', $('rotate').value);
+    run($('splitGo'), 'Splitting…', out, '/pdf/split', form, 'split.pdf',
+      (res) => res.headers.get('content-type')?.includes('zip') ? ' · ZIP of separate PDFs' : '');
+  });
+
+  // --- compress ----------------------------------------------------------------------
+  const LEVELS = {
+    small: 'Images drop to screen quality (72 dpi). Best for email and texting.',
+    balanced: 'Images at 150 dpi. Good on screen and fine on a home printer.',
+    print: 'Images at 300 dpi. Keeps print quality; saves less space.'
+  };
+  let level = 'balanced';
+  $('levelHint').textContent = LEVELS[level];
+  document.querySelectorAll('[data-level]').forEach((b) => b.addEventListener('click', () => {
+    level = b.dataset.level;
+    document.querySelectorAll('[data-level]').forEach((x) => x.classList.toggle('on', x === b));
+    $('levelHint').textContent = LEVELS[level];
+  }));
+  $('compressDrop').innerHTML = dropMarkup('Choose a PDF', 'Scans and photo-heavy PDFs shrink the most.');
+  const comp = singleFile($('compressFile'), (f) => { $('compressGo').disabled = !f; $('compressOut').innerHTML = ''; });
+  dropzone($('compressDrop'), { accept: '.pdf,application/pdf', onFiles: ([f]) => comp.set(f) });
+  $('compressGo').addEventListener('click', async () => {
+    const out = $('compressOut');
+    out.innerHTML = '';
+    const form = new FormData();
+    form.append('files', comp.file);
+    form.append('level', level);
+    await busy($('compressGo'), 'Compressing…', async () => {
+      try {
+        const res = await upload('/pdf/compress', form);
+        const blob = await res.blob();
+        const before = Number(res.headers.get('x-original-bytes')) || comp.file.size;
+        const after = blob.size;
+        const name = filenameFrom(res, 'compressed.pdf');
+        if (res.headers.get('x-improved') !== 'true') {
+          note(out, 'warn', `This PDF is already as small as it gets at this setting (${formatBytes(before)}). Nothing to download.${level === 'small' ? ' It probably has few or no photos to shrink.' : ' Try <b>Smallest</b>.'}`);
+          return;
+        }
+        const pct = Math.round((1 - after / before) * 100);
+        showResult(out, blob, name, `<div class="saving">${pct}% smaller</div><span class="muted">${formatBytes(before)} → ${formatBytes(after)}</span>`);
+      } catch (err) {
+        note(out, 'err', err.message);
+      }
+    });
+  });
+
+  // --- PDF → images ------------------------------------------------------------------
+  $('toImgDrop').innerHTML = dropMarkup('Choose a PDF', 'Each page becomes an image.');
+  const toImg = singleFile($('toImgFile'), (f) => { $('toImgGo').disabled = !f; $('toImgOut').innerHTML = ''; });
+  dropzone($('toImgDrop'), { accept: '.pdf,application/pdf', onFiles: ([f]) => toImg.set(f) });
+  $('toImgGo').addEventListener('click', () => {
+    const form = new FormData();
+    form.append('files', toImg.file);
+    form.append('format', $('imgFormat').value);
+    form.append('dpi', $('dpi').value);
+    if ($('imgPages').value.trim()) form.append('ranges', $('imgPages').value);
+    run($('toImgGo'), 'Rendering…', $('toImgOut'), '/pdf/to-images', form, 'pages.zip',
+      (res) => res.headers.get('content-type')?.includes('zip') ? ' · ZIP, one image per page' : '');
+  });
+
+  // --- images → PDF ------------------------------------------------------------------
+  $('fromImgDrop').innerHTML = dropMarkup('Add images', 'JPG, PNG, WebP… drop several at once.');
+  const fromImg = orderedList($('fromImgList'), (files) => {
+    $('fromImgGo').disabled = !files.length;
+    $('fromImgGo').textContent = files.length > 1 ? `Make a ${files.length}-page PDF` : 'Make PDF';
+  });
+  dropzone($('fromImgDrop'), { accept: 'image/*', multiple: true, onFiles: (f) => fromImg.add(f) });
+  $('fromPage').addEventListener('change', () => { $('marginField').hidden = $('fromPage').value === 'fit'; });
+  $('fromImgGo').addEventListener('click', () => {
+    const form = new FormData();
+    fromImg.files.forEach((f) => form.append('files', f));
+    form.append('pageSize', $('fromPage').value);
+    form.append('margin', $('margin').value);
+    run($('fromImgGo'), 'Building…', $('fromImgOut'), '/pdf/from-images', form, 'images.pdf');
+  });
+})();
+</script>
+</body>
+</html>

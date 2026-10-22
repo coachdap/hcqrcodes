@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Utilities · qrgen</title>
+<title>SVG → WebP · Utilities</title>
 <link rel="stylesheet" href="/ui/shared.css">
 <style>
   .dropzone {
@@ -46,25 +46,13 @@
   .handle.sw { left: -8px; bottom: -8px; cursor: nesw-resize; }
   .handle.w  { left: -8px; top: 50%; transform: translateY(-50%); cursor: ew-resize; }
 
-  .section { font-size: 11.5px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 4px 0 12px; }
   .section + .section { margin-top: 0; }
-  hr { border: 0; border-top: 1px solid var(--line); margin: 18px 0; }
-  .row-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
   .unit { position: relative; }
   .unit input { padding-right: 34px; }
   .unit em { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-size: 11px; color: var(--muted); font-style: normal; pointer-events: none; }
-  .inline { display: flex; gap: 9px; align-items: center; flex-wrap: wrap; }
-  .toggle { display: inline-flex; align-items: center; gap: 7px; font-size: 13px; font-weight: 500; color: var(--text); margin: 0; cursor: pointer; }
-  .toggle input { width: auto; margin: 0; accent-color: var(--accent); }
-  .seg { display: inline-flex; padding: 3px; gap: 2px; background: var(--soft); border-radius: 8px; }
-  .seg button { padding: 6px 12px; font-size: 13px; background: transparent; color: var(--muted); border: 0; }
-  .seg button:hover { filter: none; color: var(--text); }
-  .seg button.on { background: var(--raised); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.08); }
   .sizerow { display: grid; grid-template-columns: 1fr 34px 1fr; gap: 8px; align-items: end; }
   .sizerow .lock { height: 38px; padding: 0; font-size: 15px; background: var(--soft); color: var(--muted); border: 0; }
   .sizerow .lock.on { color: var(--text); background: var(--line); }
-  .rangehead { display: flex; justify-content: space-between; }
-  .rangehead b { font-weight: 600; font-variant-numeric: tabular-nums; }
 
   .result { margin-top: 16px; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
   .result .thumb { display: grid; place-items: center; padding: 14px; }
@@ -76,18 +64,12 @@
 </style>
 </head>
 <body>
-<div class="wrap">
-  <header class="masthead">
-    <a class="brand" href="/ui">qrgen <small>Hoops College &amp; Chase Excellence</small></a>
-    <nav class="nav" aria-label="Tools">
-      <a href="/ui">QR code</a>
-      <a href="/ui/utilities" aria-current="page">Utilities</a>
-    </nav>
-  </header>
-
+<main class="wrap" data-tool="svg">
   <header class="page">
-    <h1>SVG → WebP</h1>
-    <div class="sub">Crop a vector exactly where you want it, then export a clean WebP or PNG at any size.</div>
+    <div>
+      <h1>SVG → WebP</h1>
+      <div class="sub">Crop a vector exactly where you want it, then export a clean WebP or PNG at any size. For JPG, PNG or photos, use the <a href="/ui/convert">Image converter</a>.</div>
+    </div>
   </header>
 
   <div class="panel dropzone" id="drop" tabindex="0" role="button" aria-label="Choose an SVG file">
@@ -211,17 +193,6 @@
         <label class="toggle"><input type="checkbox" id="lossless"> Lossless WebP (larger file, pixel-exact edges)</label>
       </div>
 
-      <div class="field" id="tokenField" hidden>
-        <div class="tokenbar">
-          <div class="field">
-            <label for="token">API token</label>
-            <input type="password" id="token" placeholder="required from outside hc-internal" autocomplete="off">
-          </div>
-          <button type="button" class="ghost" id="saveToken">Remember</button>
-        </div>
-        <div class="hint" id="tokenHint">Stored in this browser only.</div>
-      </div>
-
       <div class="actions">
         <button type="submit" id="go">Convert</button>
       </div>
@@ -237,7 +208,7 @@
       <div id="notes"></div>
     </form>
   </div>
-</div>
+</main>
 
 <script src="/ui/shared.js"></script>
 <script>
@@ -693,7 +664,6 @@
 
   window.addEventListener('resize', render);
 
-  qrgenUI.initToken();
 })();
 </script>
 </body>

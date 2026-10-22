@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Link builder · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .built { display: flex; gap: 8px; align-items: stretch; }
+  .built output { flex: 1; min-width: 0; padding: 10px 12px; border-radius: 8px; background: var(--soft); font: 12.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; }
+  .qrbox { display: grid; place-items: center; min-height: 240px; padding: 16px; border-radius: 8px; }
+  .qrbox svg { width: 100%; max-width: 240px; height: auto; display: block; }
+  .tbl-wrap { overflow-x: auto; }
+  table.list td.url { font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; word-break: break-all; min-width: 220px; }
+  .opt { color: var(--muted); font-weight: 500; }
+  @media (max-width: 560px) { table.list td.url { min-width: 0; } table.list td, table.list th { padding-left: 6px; padding-right: 6px; } }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="links">
+  <header class="page">
+    <div>
+      <h1>Link builder</h1>
+      <div class="sub">Tag a link with where it was shared (UTM tags) so Google Analytics shows which flyer, sign or post brought people in. Each link gets its own QR code.</div>
+    </div>
+  </header>
+
+  <div class="field">
+    <div class="seg" role="tablist" aria-label="Mode">
+      <button type="button" class="on" data-mode="single" role="tab" aria-selected="true">One link</button>
+      <button type="button" data-mode="bulk" role="tab" aria-selected="false">One link per source</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <form class="panel" id="form" autocomplete="off">
+      <div class="field">
+        <label for="base">Page link</label>
+        <input type="url" id="base" placeholder="https://hoopscollege.com/tryouts">
+        <div class="hint">The page people should land on.</div>
+      </div>
+
+      <div class="field" id="sourceField">
+        <label for="source">Source <span class="opt">— where is it shared?</span></label>
+        <input type="text" id="source" placeholder="flyer">
+        <div class="chips" id="sourceChips"></div>
+      </div>
+      <div class="field" id="bulkField" hidden>
+        <label>Sources <span class="opt">— one link each</span></label>
+        <div class="chips" id="bulkChips"></div>
+        <input type="text" id="bulkExtra" placeholder="Add more, comma-separated (e.g. newsletter, partner-gym)" style="margin-top:8px">
+      </div>
+
+      <div class="field">
+        <label for="medium">Medium <span class="opt">— what kind of channel?</span></label>
+        <input type="text" id="medium" placeholder="print">
+        <div class="chips" id="mediumChips"></div>
+      </div>
+
+      <div class="field">
+        <label for="campaign">Campaign</label>
+        <input type="text" id="campaign" placeholder="summer-camp-2026">
+        <div class="hint">Name it once and reuse it everywhere, e.g. <code>fall-tryouts-2026</code>. Spaces become hyphens.</div>
+      </div>
+
+      <details>
+        <summary>More tags (optional)</summary>
+        <div class="row">
+          <div class="field">
+            <label for="content">Content <span class="opt">— which version?</span></label>
+            <input type="text" id="content" placeholder="blue-version">
+          </div>
+          <div class="field">
+            <label for="term">Term</label>
+            <input type="text" id="term" placeholder="">
+          </div>
+        </div>
+      </details>
+      <div id="formNotes"></div>
+    </form>
+
+    <div class="panel" id="singleOut">
+      <label>Your link</label>
+      <div class="built">
+        <output id="url">Enter a page link to start.</output>
+      </div>
+      <div class="actions" style="margin-top:10px">
+        <button type="button" id="copy" disabled>Copy link</button>
+        <button type="button" class="ghost" id="save" disabled>Save to list</button>
+      </div>
+
+      <hr>
+      <div class="qrbox checker" id="qr"><div class="placeholder">The QR code appears here.</div></div>
+      <div class="actions" style="margin-top:12px">
+        <button type="button" class="ghost" id="dlSvg" disabled>Download SVG</button>
+        <button type="button" class="ghost" id="dlPng" disabled>Download PNG</button>
+        <a class="ghost" id="openQr" href="/ui/qr" style="align-self:center;font-size:13.5px;font-weight:600;margin-left:4px">Open in QR tool →</a>
+      </div>
+      <div id="qrNotes"></div>
+    </div>
+
+    <div class="panel" id="bulkOut" hidden>
+      <label>Links</label>
+      <div class="tbl-wrap">
+        <table class="list" id="bulkTable"><tbody><tr><td class="muted">Enter a page link and pick sources.</td></tr></tbody></table>
+      </div>
+      <div class="actions" style="margin-top:12px">
+        <button type="button" id="bulkZip" disabled>Download all QR codes (zip)</button>
+        <button type="button" class="ghost" id="bulkCsv" disabled>Download CSV</button>
+        <button type="button" class="ghost" id="bulkSave" disabled>Save all to list</button>
+      </div>
+      <div id="bulkNotes"></div>
+    </div>
+  </div>
+
+  <section class="panel" style="margin-top:20px">
+    <div class="inline" style="justify-content:space-between;margin-bottom:10px">
+      <div class="section" style="margin:0">Saved links</div>
+      <div class="inline">
+        <button type="button" class="ghost small" id="exportCsv">Export CSV</button>
+        <button type="button" class="ghost small" id="clearSaved">Clear</button>
+      </div>
+    </div>
+    <div class="tbl-wrap"><table class="list" id="saved"></table></div>
+    <div class="hint">Saved in this browser only.</div>
+  </section>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, api, note, toast, busy, downloadBlob, escapeHtml, debounce } = qrgenUI;
+  const SOURCES = ['flyer', 'poster', 'gym-sign', 'instagram', 'facebook', 'tiktok', 'email', 'text', 'website'];
+  const MEDIUMS = ['print', 'qr', 'social', 'email', 'sms', 'referral'];
+  const SAVED_KEY = 'qrgen.links';
+  let mode = 'single';
+  let bulkSelected = new Set(['flyer', 'poster', 'instagram']);
+  let qrSvg = '';
+
+  const slug = (s) => String(s || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+
+  function chips(container, values, onPick, isOn) {
+    container.innerHTML = values.map((v) => `<button type="button" class="chip${isOn(v) ? ' on' : ''}" data-v="${v}">${v}</button>`).join('');
+    container.querySelectorAll('.chip').forEach((c) => c.addEventListener('click', () => onPick(c.dataset.v)));
+  }
+  function paintChips() {
+    chips($('sourceChips'), SOURCES, (v) => { $('source').value = v; update(); }, (v) => slug($('source').value) === v);
+    chips($('mediumChips'), MEDIUMS, (v) => { $('medium').value = v; update(); }, (v) => slug($('medium').value) === v);
+    chips($('bulkChips'), SOURCES, (v) => { bulkSelected.has(v) ? bulkSelected.delete(v) : bulkSelected.add(v); update(); }, (v) => bulkSelected.has(v));
+  }
+
+  function baseUrl() {
+    let raw = $('base').value.trim();
+    if (!raw) return null;
+    if (!/^[a-z][a-z0-9+.-]*:\/\//i.test(raw)) raw = 'https://' + raw;
+    try { const u = new URL(raw); return /^https?:$/.test(u.protocol) && u.hostname.includes('.') ? u : null; } catch (_) { return null; }
+  }
+
+  function build(source) {
+    const u = baseUrl();
+    if (!u) return null;
+    const tags = { utm_source: slug(source), utm_medium: slug($('medium').value), utm_campaign: slug($('campaign').value), utm_content: slug($('content').value), utm_term: slug($('term').value) };
+    for (const [k, v] of Object.entries(tags)) { if (v) u.searchParams.set(k, v); else u.searchParams.delete(k); }
+    return u.toString();
+  }
+
+  function bulkSources() {
+    const extra = $('bulkExtra').value.split(',').map(slug).filter(Boolean);
+    return [...new Set([...SOURCES.filter((s) => bulkSelected.has(s)), ...extra])];
+  }
+
+  function update() {
+    paintChips();
+    $('formNotes').innerHTML = '';
+    if ($('base').value.trim() && !baseUrl()) note($('formNotes'), 'warn', 'That doesn\'t look like a web address yet, e.g. <code>hoopscollege.com/camp</code>.');
+    if (mode === 'single') updateSingle(); else updateBulk();
+  }
+
+  function updateSingle() {
+    const url = build($('source').value);
+    $('url').textContent = url || 'Enter a page link to start.';
+    for (const id of ['copy', 'save']) $(id).disabled = !url;
+    if (url && !slug($('source').value)) $('url').title = 'Tip: add a source so analytics can tell where people came from.';
+    $('openQr').href = url ? '/ui/qr?data=' + encodeURIComponent(url) : '/ui/qr';
+    refreshQr(url);
+  }
+
+  const refreshQr = debounce(async (url) => {
+    $('qrNotes').innerHTML = '';
+    if (!url) { qrSvg = ''; $('qr').innerHTML = '<div class="placeholder">The QR code appears here.</div>'; setQrButtons(); return; }
+    try {
+      const res = await api('/generate', { data: url, format: 'svg', size: 1024, dark: '#0B1F3A' });
+      if (url !== build($('source').value)) return;
+      qrSvg = await res.text();
+      $('qr').innerHTML = qrSvg;
+    } catch (err) {
+      qrSvg = '';
+      $('qr').innerHTML = '<div class="placeholder">No QR code.</div>';
+      note($('qrNotes'), 'err', err.message);
+    }
+    setQrButtons();
+  }, 450);
+
+  function setQrButtons() { $('dlSvg').disabled = $('dlPng').disabled = !qrSvg; }
+
+  function fileStem(url) {
+    const u = new URL(url);
+    return slug([u.hostname.replace(/^www\./, ''), u.pathname, u.searchParams.get('utm_source')].join('-')).slice(0, 60) || 'link';
+  }
+
+  $('copy').addEventListener('click', async () => { await copyText(build($('source').value)); });
+  $('save').addEventListener('click', () => { const u = build($('source').value); if (u) { addSaved([u]); toast('Saved to list'); } });
+  $('dlSvg').addEventListener('click', () => {
+    const url = build($('source').value);
+    downloadBlob(new Blob([qrSvg], { type: 'image/svg+xml' }), fileStem(url) + '.svg');
+  });
+  $('dlPng').addEventListener('click', () => busy($('dlPng'), 'Rendering…', async () => {
+    const url = build($('source').value);
+    try {
+      const res = await api('/generate', { data: url, format: 'png', size: 2048, dark: '#0B1F3A' });
+      downloadBlob(await res.blob(), fileStem(url) + '.png');
+    } catch (err) { note($('qrNotes'), 'err', err.message); }
+  }));
+
+  async function copyText(text) {
+    try { await navigator.clipboard.writeText(text); toast('Link copied'); }
+    catch (_) { window.prompt('Copy this link:', text); }
+  }
+
+  // --- bulk ------------------------------------------------------------------
+
+  function bulkRows() {
+    return bulkSources().map((s) => ({ source: s, url: build(s) })).filter((r) => r.url);
+  }
+
+  function updateBulk() {
+    const rows = bulkRows();
+    const tbl = $('bulkTable');
+    if (!rows.length) {
+      tbl.innerHTML = `<tbody><tr><td class="muted">${baseUrl() ? 'Pick at least one source.' : 'Enter a page link and pick sources.'}</td></tr></tbody>`;
+    } else {
+      tbl.innerHTML = '<thead><tr><th>Source</th><th>Link</th><th></th></tr></thead><tbody>' +
+        rows.map((r, i) => `<tr><td><b>${escapeHtml(r.source)}</b></td><td class="url">${escapeHtml(r.url)}</td><td><button type="button" class="iconbtn" data-copy="${i}">Copy</button></td></tr>`).join('') + '</tbody>';
+      tbl.querySelectorAll('[data-copy]').forEach((b) => b.addEventListener('click', () => copyText(rows[Number(b.dataset.copy)].url)));
+    }
+    for (const id of ['bulkZip', 'bulkCsv', 'bulkSave']) $(id).disabled = !rows.length;
+  }
+
+  $('bulkZip').addEventListener('click', () => busy($('bulkZip'), 'Building…', async () => {
+    $('bulkNotes').innerHTML = '';
+    const rows = bulkRows();
+    const campaign = slug($('campaign').value) || 'links';
+    try {
+      const res = await api('/generate/batch', { format: 'svg', items: rows.map((r) => ({ data: r.url, name: `${campaign}-${r.source}`, dark: '#0B1F3A' })) });
+      downloadBlob(await res.blob(), `${campaign}-qr-codes.zip`);
+    } catch (err) { note($('bulkNotes'), 'err', err.message); }
+  }));
+  $('bulkCsv').addEventListener('click', () => {
+    const rows = bulkRows();
+    downloadBlob(new Blob([toCsv([['source', 'url'], ...rows.map((r) => [r.source, r.url])])], { type: 'text/csv' }), `${slug($('campaign').value) || 'links'}.csv`);
+  });
+  $('bulkSave').addEventListener('click', () => { addSaved(bulkRows().map((r) => r.url)); toast('Saved to list'); });
+
+  // --- saved list --------------------------------------------------------------
+
+  function loadSaved() { try { return JSON.parse(localStorage.getItem(SAVED_KEY)) || []; } catch (_) { return []; } }
+  function storeSaved(list) { try { localStorage.setItem(SAVED_KEY, JSON.stringify(list.slice(0, 200))); } catch (_) {} }
+  function addSaved(urls) {
+    const list = loadSaved().filter((s) => !urls.includes(s.url));
+    const at = new Date().toISOString();
+    storeSaved([...urls.map((url) => ({ url, at })), ...list]);
+    renderSaved();
+  }
+  function renderSaved() {
+    const list = loadSaved();
+    const tbl = $('saved');
+    if (!list.length) { tbl.innerHTML = '<tbody><tr><td class="muted">Nothing saved yet.</td></tr></tbody>'; return; }
+    tbl.innerHTML = '<thead><tr><th>Link</th><th>Saved</th><th></th></tr></thead><tbody>' + list.map((s, i) =>
+      `<tr><td class="url">${escapeHtml(s.url)}</td><td class="num muted">${new Date(s.at).toLocaleDateString()}</td>` +
+      `<td style="white-space:nowrap"><button type="button" class="iconbtn" data-c="${i}">Copy</button><a class="iconbtn" href="/ui/qr?data=${encodeURIComponent(s.url)}">QR</a><button type="button" class="iconbtn" data-d="${i}" aria-label="Remove">✕</button></td></tr>`).join('') + '</tbody>';
+    tbl.querySelectorAll('[data-c]').forEach((b) => b.addEventListener('click', () => copyText(list[Number(b.dataset.c)].url)));
+    tbl.querySelectorAll('[data-d]').forEach((b) => b.addEventListener('click', () => { list.splice(Number(b.dataset.d), 1); storeSaved(list); renderSaved(); }));
+  }
+  function toCsv(rows) {
+    return rows.map((r) => r.map((c) => { const s = String(c ?? ''); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; }).join(',')).join('\r\n') + '\r\n';
+  }
+  $('exportCsv').addEventListener('click', () => {
+    const list = loadSaved();
+    if (!list.length) return toast('Nothing saved yet');
+    const rows = list.map((s) => { const u = new URL(s.url); const p = (k) => u.searchParams.get(k) || ''; return [s.url, u.origin + u.pathname, p('utm_source'), p('utm_medium'), p('utm_campaign'), p('utm_content'), p('utm_term'), s.at]; });
+    downloadBlob(new Blob([toCsv([['url', 'page', 'source', 'medium', 'campaign', 'content', 'term', 'saved'], ...rows])], { type: 'text/csv' }), 'saved-links.csv');
+  });
+  $('clearSaved').addEventListener('click', () => { if (confirm('Remove all saved links from this browser?')) { storeSaved([]); renderSaved(); } });
+
+  // --- wiring ------------------------------------------------------------------
+
+  document.querySelectorAll('[data-mode]').forEach((b) => b.addEventListener('click', () => {
+    mode = b.dataset.mode;
+    document.querySelectorAll('[data-mode]').forEach((x) => { x.classList.toggle('on', x === b); x.setAttribute('aria-selected', String(x === b)); });
+    $('sourceField').hidden = mode !== 'single';
+    $('bulkField').hidden = mode !== 'bulk';
+    $('singleOut').hidden = mode !== 'single';
+    $('bulkOut').hidden = mode !== 'bulk';
+    update();
+  }));
+  $('form').addEventListener('input', update);
+  $('form').addEventListener('submit', (e) => e.preventDefault());
+  $('campaign').addEventListener('change', () => { $('campaign').value = slug($('campaign').value); update(); });
+
+  paintChips();
+  renderSaved();
+  update();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Favicon pack · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .mocks { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 14px; }
+  .mock { border: 1px solid var(--line); border-radius: 10px; padding: 14px; background: var(--bg); }
+  .mock h4 { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .ic { position: relative; overflow: hidden; display: grid; place-items: center; flex: none; }
+  .ic img { display: block; object-fit: contain; }
+  .tab { display: flex; align-items: center; gap: 8px; background: var(--panel); border: 1px solid var(--line); border-bottom: 0; border-radius: 8px 8px 0 0; padding: 7px 10px; max-width: 220px; font-size: 12px; }
+  .tab span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .tabbar { border-bottom: 1px solid var(--line); padding: 0 6px; }
+  .sizes { display: flex; align-items: flex-end; gap: 14px; margin-top: 12px; font-size: 11px; color: var(--muted); }
+  .sizes div { text-align: center; }
+  .phone { background: linear-gradient(160deg, #3a5f9e, #0B1F3A); border-radius: 12px; padding: 18px 10px 14px; display: flex; justify-content: center; gap: 18px; }
+  .app { text-align: center; color: #fff; font-size: 11px; width: 64px; }
+  .app .ic { margin: 0 auto 5px; }
+  .app span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  pre.snippet { margin: 0; padding: 12px; border-radius: 8px; background: var(--soft); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; overflow-x: auto; white-space: pre; }
+  .srcrow { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
+  .srcrow .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="favicon">
+  <header class="page">
+    <div>
+      <h1>Favicon pack</h1>
+      <div class="sub">Turn a logo into every icon a website needs: the browser-tab favicon, iPhone and Android home-screen icons, and the code to add them. A square SVG or PNG logo works best.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <div class="stack">
+      <div class="drop" id="drop"></div>
+      <div class="panel" id="previewPanel" hidden>
+        <div class="srcrow">
+          <span class="name" id="srcName"></span>
+          <button type="button" class="ghost small" id="change">Change logo</button>
+        </div>
+        <div class="mocks">
+          <div class="mock">
+            <h4>Browser tab</h4>
+            <div class="tabbar"><div class="tab"><span class="ic" data-size="16"></span><span id="tabTitle">Hoops College</span></div></div>
+            <div class="sizes">
+              <div><span class="ic" data-size="16"></span>16</div>
+              <div><span class="ic" data-size="32"></span>32</div>
+              <div><span class="ic" data-size="48"></span>48</div>
+            </div>
+          </div>
+          <div class="mock">
+            <h4>Phone home screen</h4>
+            <div class="phone">
+              <div class="app"><span class="ic" data-size="56" data-shape="ios"></span><span id="iosName">Hoops College</span></div>
+              <div class="app"><span class="ic" data-size="56" data-shape="round"></span><span>Android</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel" id="snippetPanel" hidden>
+        <div class="inline" style="justify-content:space-between;margin-bottom:10px">
+          <div class="section" style="margin:0">Add to your site's &lt;head&gt;</div>
+          <button type="button" class="ghost small" id="copySnippet">Copy</button>
+        </div>
+        <pre class="snippet" id="snippet"></pre>
+        <div class="hint">Upload the files from the zip to the root of the website, next to the home page.</div>
+      </div>
+    </div>
+
+    <form class="panel sticky" id="form">
+      <div class="field">
+        <div class="rangehead"><label for="padding">Padding</label><b id="paddingVal">0%</b></div>
+        <input type="range" id="padding" min="0" max="30" value="0">
+        <div class="hint">Breathing room around the logo. Rounded and circular icons usually need about 10%.</div>
+      </div>
+      <div class="field">
+        <label for="bg">Background</label>
+        <div class="inline" style="flex-wrap:nowrap">
+          <select id="bg">
+            <option value="transparent">Transparent</option>
+            <option value="#FFFFFF">White</option>
+            <option value="#0B1F3A">HC navy</option>
+            <option value="custom">Custom…</option>
+          </select>
+          <input type="color" id="bgColor" value="#FFFFFF" style="width:46px;flex:none" hidden>
+        </div>
+        <div class="hint">iPhone icons can't be transparent, so they get white unless you pick a colour.</div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label for="appName">Site name</label>
+          <input type="text" id="appName" value="Hoops College" maxlength="60">
+        </div>
+        <div class="field">
+          <label for="theme">Theme colour</label>
+          <input type="color" id="theme" value="#0B1F3A">
+        </div>
+      </div>
+      <div class="actions">
+        <button type="submit" id="go" disabled>Download favicon pack</button>
+      </div>
+      <div class="hint" style="margin-top:10px">Includes favicon.ico, PNG icons (16, 32, 180, 192, 512), a maskable icon, site.webmanifest and the HTML snippet.</div>
+      <div id="notes"></div>
+    </form>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, upload, note, toast, busy, downloadBlob, filenameFrom, dropzone, dropMarkup } = qrgenUI;
+  let file = null, url = '';
+
+  $('drop').innerHTML = dropMarkup('Drop your logo here', 'or click to choose. SVG, PNG, JPG or WebP. You can also paste.');
+  const dz = dropzone($('drop'), { accept: '.svg,.png,.jpg,.jpeg,.webp,image/svg+xml,image/png,image/jpeg,image/webp', paste: true, onFiles: ([f]) => load(f) });
+
+  function load(f) {
+    file = f;
+    if (url) URL.revokeObjectURL(url);
+    url = URL.createObjectURL(f);
+    $('srcName').textContent = f.name;
+    $('drop').hidden = true;
+    $('previewPanel').hidden = false;
+    $('snippetPanel').hidden = false;
+    $('go').disabled = false;
+    $('notes').innerHTML = '';
+    paint();
+  }
+
+  const isSvg = () => file && (file.type === 'image/svg+xml' || /\.svg$/i.test(file.name));
+
+  function bg() {
+    const v = $('bg').value;
+    return v === 'custom' ? $('bgColor').value.toUpperCase() : v;
+  }
+
+  // Mirrors images.js: the head snippet the zip contains.
+  function snippet() {
+    return [
+      '<link rel="icon" href="/favicon.ico" sizes="48x48">',
+      isSvg() ? '<link rel="icon" href="/favicon.svg" type="image/svg+xml">' : null,
+      '<link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">',
+      '<link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">',
+      '<link rel="apple-touch-icon" href="/apple-touch-icon.png">',
+      '<link rel="manifest" href="/site.webmanifest">',
+      `<meta name="theme-color" content="${$('theme').value.toUpperCase()}">`
+    ].filter(Boolean).join('\n');
+  }
+
+  function paint() {
+    const pad = Number($('padding').value);
+    $('paddingVal').textContent = pad + '%';
+    $('bgColor').hidden = $('bg').value !== 'custom';
+    const name = $('appName').value || 'Hoops College';
+    $('tabTitle').textContent = name;
+    $('iosName').textContent = name;
+    $('snippet').textContent = snippet();
+    if (!file) return;
+    const b = bg();
+    document.querySelectorAll('.ic').forEach((el) => {
+      const size = Number(el.dataset.size);
+      const shape = el.dataset.shape;
+      // Home-screen icons are always opaque, as in the generated pack.
+      const fill = shape ? (b === 'transparent' ? '#FFFFFF' : b) : b === 'transparent' ? 'transparent' : b;
+      const p = shape ? Math.max(pad, shape === 'round' ? 12 : 8) : size <= 32 ? Math.min(pad, size === 16 ? 6 : 8) : pad;
+      const inner = Math.max(1, Math.round(size * (1 - (p / 100) * 2)));
+      el.style.cssText = `width:${size}px;height:${size}px;background:${fill};border-radius:${shape === 'ios' ? '22%' : shape === 'round' ? '50%' : '0'}`;
+      el.innerHTML = `<img src="${url}" alt="" style="width:${inner}px;height:${inner}px">`;
+    });
+  }
+
+  $('form').addEventListener('input', paint);
+  $('bg').addEventListener('change', paint);
+  $('change').addEventListener('click', () => dz.open());
+  $('copySnippet').addEventListener('click', async () => {
+    try { await navigator.clipboard.writeText(snippet()); toast('Snippet copied'); }
+    catch (_) { window.prompt('Copy this:', snippet()); }
+  });
+
+  $('form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    if (!file) return;
+    $('notes').innerHTML = '';
+    busy($('go'), 'Building…', async () => {
+      const form = new FormData();
+      form.append('files', file);
+      form.append('padding', $('padding').value);
+      form.append('background', bg());
+      form.append('appName', $('appName').value);
+      form.append('themeColor', $('theme').value.toUpperCase());
+      try {
+        const res = await upload('/image/favicon', form);
+        downloadBlob(await res.blob(), filenameFrom(res, 'favicon-pack.zip'));
+        toast('Favicon pack downloaded');
+      } catch (err) {
+        note($('notes'), 'err', err.message);
+      }
+    });
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>

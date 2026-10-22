@@ -2,13 +2,16 @@
 
 Print-ready and web-ready QR code generation for Hoops College and Chase Excellence —
 flyers, gym signage, jersey tags, registration links, WiFi access and vCards — plus a
-utilities page with a crop-accurate SVG → WebP/PNG converter.
+browser **Utilities** hub at `/ui`: link builder, SVG → WebP, image converter, social
+sizes, photo compressor, favicon packs, flyer maker, name tags and rosters, event
+check-in, PDF tools, video tools and a brand kit.
 
 One generator, three ways in: HTTP (n8n, Hyperframes), a local CLI, and an importable
 JS client. All generation happens locally — no external API calls, no telemetry, no
 redirect domains.
 
-- Node 22 · Express · `qrcode` · `sharp` · `@resvg/resvg-js` · `zod` · `archiver`
+- Node 22 · Express · `qrcode` · `sharp` · `@resvg/resvg-js` · `pdf-lib` · `multer` · `zod` · `archiver`
+- In the image: `ffmpeg`, `poppler-utils`, `ghostscript`, `fonts-inter`
 - Deployed on **hc-new** as a container on the `hc-internal` Docker network,
   published to `127.0.0.1:3020` and reverse-proxied by Apache at
   `https://qr.hoopscollege.com`
@@ -177,34 +180,45 @@ user units. `hasText` flags live `<text>`, which renders with the container's fo
 
 Open, no token. `{"status":"ok","service":"qrgen","uptime":123}`.
 
-### `GET /ui` — browser interface
+### `GET /ui` — the Utilities hub
 
-A single self-contained page for generating a QR from a link by hand: paste a link,
-pick format and colours, optionally attach a logo, then preview and download. It shows
-the QR version, EC level, file size and any warnings, and has a live byte counter that
-tracks the real per-EC-level capacity.
+Every tool is a page under `/ui`, with a sidebar to move between them (a drawer on
+phones) and a home page at `/ui` that lists and searches them all. Pages are plain HTML
+in `public/`, styled by `public/shared.css`. `public/shared.js` builds the shell from
+one tool registry, so adding a tool means one registry entry, one page and one slug in
+`TOOL_PAGES` in `src/server.js`.
+
+| Page | Tool |
+| --- | --- |
+| `/ui/qr` | QR code: link/text, Wi-Fi or contact card; SVG/PNG, colours, logo |
+| `/ui/links` | Link builder: UTM-tagged links per flyer/sign/post, each with a QR; bulk mode |
+| `/ui/svg` | SVG → WebP/PNG with an exact crop (formerly `/ui/utilities`, which redirects) |
+| `/ui/convert` | Image converter: JPG/PNG/WebP/AVIF/SVG in, WebP/PNG/JPG/AVIF out, resize |
+| `/ui/social` | Social sizes: one image → every Instagram/Facebook/X/YouTube/LinkedIn size |
+| `/ui/compress` | Compress photos for the web; strips EXIF including GPS location |
+| `/ui/favicon` | Favicon pack: `.ico`, PNGs, Apple/Android icons, manifest, `<head>` tags |
+| `/ui/flyer` | Flyer maker: branded print PDF or social PNG with a vector QR, live preview |
+| `/ui/tags` | Name tags, bag/jersey labels (Avery layouts) and roster sign-in sheets |
+| `/ui/checkin` | Check-in: scan badge QRs with a phone camera, live attendance, CSV export |
+| `/ui/pdf` | PDF tools: merge, split/extract/rotate, compress, PDF → images, images → PDF |
+| `/ui/video` | Video tools: compress for sharing, GIF, thumbnails, MP3, with trimming |
+| `/ui/brand` | Brand kit: logos (any format/size), colours, fonts per brand |
+
+**SVG → WebP** (`/ui/svg`): drop, choose or paste an SVG; the artwork bounds are
+detected and shown as a draggable crop box (eight handles, drag to move, arrow keys to
+nudge, optional locked ratio, exact X/Y/W/H fields, padding). Pick WebP or PNG, a scale
+preset or explicit pixel size, quality or lossless, and a background, then convert. The
+source is editable in place. The preview is the SVG with its root viewport normalised
+exactly as the server does it, so the crop you see is the crop you get.
 
 Same-origin with the API, so there is no CORS setup and nothing separate to deploy.
-`GET /` redirects browsers here; API clients sending `Accept: */*` still get the JSON
-index instead. The UI is confined to `/ui` deliberately, so a Cloudflare Access policy
-can protect the page by path prefix without also covering the API routes.
+`GET /` redirects browsers to `/ui`; API clients sending `Accept: */*` still get the JSON
+index. Everything browser-facing is confined to `/ui`, so a Cloudflare Access policy
+can protect it by path prefix without also covering the API routes.
 
-From outside `hc-internal` the page asks for the bearer token once and keeps it in that
-browser's `localStorage`. Loading the page is not gated; generating is.
-
-### `GET /ui/utilities` — SVG → WebP
-
-The utilities page, reached from the tool switcher in the masthead. Drop, choose or
-paste an SVG; the artwork bounds are detected and shown as a draggable crop box (eight
-handles, drag to move, arrow keys to nudge, optional locked ratio, exact X/Y/W/H
-fields, padding). Pick WebP or PNG, a scale preset or explicit pixel size, quality or
-lossless, and a background, then convert and download. The source is editable in
-place — edits re-analyse the artwork and are what gets exported. The preview is the
-SVG with its root viewport normalised exactly as the server does it, so the crop you
-see is the crop you get, including offset viewBoxes and `mm` documents.
-
-Shared styles and token handling live in `public/shared.css` and `public/shared.js`,
-served under `/ui/` so the same Cloudflare Access path prefix covers them.
+From outside `hc-internal` the sidebar shows **Token needed**; the token is entered once
+in a dialog, kept in that browser's `localStorage` and used by every tool. Loading pages
+is not gated; running a tool is.
 
 ### `GET /auth`
 
@@ -227,6 +241,67 @@ Lets the UI decide whether to show its token field without spending a generate c
 | `INVALID_SVG` / `UNSAFE_SVG` | 400 | `/convert/svg`: no `<svg>` root, or scripts / external resources present |
 | `OUTPUT_TOO_LARGE` | 400 | `/convert/svg`: requested raster exceeds 8192 px per edge or 40 MP |
 | `RENDER_FAILED` | 422 | `/convert/svg`: neither resvg nor librsvg could rasterise the document |
+| `UNSUPPORTED_FILE` | 415 | upload is not a type the tool accepts (HEIC photos included) |
+| `FILE_TOO_LARGE` / `TOO_MANY_FILES` / `NO_FILE` | 413 / 400 | upload limits, see `QRGEN_UPLOAD_*_MB` |
+| `UNREADABLE_IMAGE` / `UNREADABLE_PDF` / `UNREADABLE_VIDEO` | 422 | the file could not be decoded |
+| `PDF_ENCRYPTED` | 422 | password-protected PDF |
+| `BAD_RANGE` | 400 | page range does not parse or is outside the document |
+| `PROCESSING_FAILED` | 422 | ffmpeg / Ghostscript / Poppler rejected the file |
+| `JOB_NOT_FOUND` / `NOT_READY` | 404 / 409 | video job expired, or not finished |
+| `EVENT_NOT_FOUND` / `ATTENDEE_NOT_FOUND` / `BRAND_NOT_FOUND` | 404 | check-in and brand kit lookups |
+| `TOOL_MISSING` | 501 | a binary (ffmpeg, gs, pdftoppm) is not installed |
+| `BUSY` | 503 | too many heavy jobs queued; retry shortly |
+| `TIMEOUT` | 504 | a conversion ran past its time limit |
+
+---
+
+## Utilities API
+
+The pages call these routes; they are equally usable from n8n or curl. Every route sits
+behind the same rate limit and bearer-token check as `/generate`, and multipart uploads
+are parsed only after both pass. File inputs are `multipart/form-data` (any field name;
+the flyer uses `photo` and `logo`), and options are plain form fields.
+
+| Route | In | Out |
+| --- | --- | --- |
+| `POST /image/convert` | images; `format` webp/png/jpeg/avif, `quality`, `width`, `height`, `fit`, `background`, `lossless` | image, or zip for several |
+| `POST /image/compress` | images; `quality`, `maxEdge`, `format` same/jpeg/webp/avif | image (+ `X-Original-Bytes`, `X-Had-Location`), or zip |
+| `POST /image/social` | one image; `presets` (comma list), `mode` smart/center/top/bottom/blur/color, `background`, `format` | zip |
+| `POST /image/favicon` | one image; `padding` (%), `background`, `appName`, `themeColor` | zip |
+| `POST /pdf/merge` | PDFs and/or images, in order; `pageSize` | PDF |
+| `POST /pdf/split` | one PDF; `mode` ranges/each, `ranges` (`1-3, 5, 8-`), `combine`, `rotate` | PDF, or zip |
+| `POST /pdf/compress` | one PDF; `level` small/balanced/print | PDF (+ before/after headers) |
+| `POST /pdf/to-images` | one PDF; `format` png/jpeg, `dpi`, `ranges` | image, or zip |
+| `POST /pdf/from-images` | images; `pageSize` letter/a4/fit, `margin` | PDF |
+| `POST /video/jobs` | one video; `op` compress/gif/frames/mp3 + options | `202` job JSON |
+| `GET /video/jobs/:id` · `/download` | — | job status · result file |
+| `POST /print/flyer` | form fields (+ `photo`, `logo` files); `output` pdf/png/preview | PDF or PNG |
+| `POST /print/tags` | JSON `{ rows \| eventId, layout, title, qrMode, … }` | PDF |
+| `/checkin/events…` | JSON: create/list/get/delete events, `roster`, `scan`, `attendees/:pid`, `walkin`, `export.csv` | JSON / CSV |
+| `/brand…` | list/create/patch/delete brands; upload, delete and export logos (`?format&size`) | JSON / image |
+| `GET /tools/meta` | — | preset lists the pages render |
+
+**Long jobs.** Video encodes can outlast Apache's `ProxyTimeout` and Cloudflare's 100 s
+limit, so `POST /video/jobs` only uploads and queues; the page polls for progress and
+downloads the result, which is kept for 30 minutes. Encodes run one at a time; image and
+PDF work runs at most `QRGEN_HEAVY_CONCURRENCY` at once, and a backlog beyond that gets
+`503 BUSY` instead of piling up.
+
+**Stored data.** Check-in events and the brand kit are JSON files under
+`QRGEN_DATA_DIR` (`/output/data`, on the `qrgen-output` volume), so they survive
+rebuilds. The brand kit is seeded once from `assets/brand.json`, which has the HC navy
+and the HC mark only; add the full palette, fonts and the Chase Excellence logo from
+`/ui/brand`. The flyer and name-tag tools take their colours and logo from it.
+
+**Check-in QR codes.** Badges from `/ui/tags` encode `HC:<id>`, where `<id>` is the
+attendee's ID in a check-in event (generated, or taken from an `id` column in the
+roster). The scanner also accepts a URL whose last path segment or `?id=` is the ID.
+Scanning uses the phone camera in the browser (jsQR, served from `/ui/vendor/jsQR.js`),
+which needs HTTPS. That is fine on `qr.hoopscollege.com`.
+
+**Fonts.** Flyers, tags and rosters are set in Inter (`fonts-inter`), embedded in the
+PDF; if Inter is not installed they fall back to Helvetica. Text on flyers is real
+text and the QR codes are vector, so print PDFs stay sharp at any size.
 
 ---
 
@@ -417,6 +492,17 @@ proxied through Cloudflare, which masks the origin.)
 docker buildx build --platform linux/amd64 -t qrgen:latest .
 ```
 
+**Upgrading to the Utilities hub** (existing install): rebuild the image, since it now
+installs ffmpeg, Poppler, Ghostscript and Inter, and re-copy the vhost, which raises
+`LimitRequestBody` to 100 MB for video and PDF uploads:
+
+```bash
+rsync -a --exclude node_modules --exclude output --exclude .env ./ hc-new:/opt/qrgen/
+ssh hc-new 'cd /opt/qrgen && docker compose up -d --build'
+scp deploy/qr.hoopscollege.com.conf hc-new:/etc/apache2/sites-available/
+ssh hc-new 'apache2ctl configtest && systemctl reload apache2'
+```
+
 Verify container-to-container reachability:
 
 ```bash
@@ -444,6 +530,11 @@ See `.env.example` for the annotated list. Summary:
 | `QRGEN_CPUS` | `1.5` | container CPU ceiling |
 | `QRGEN_LOGO_DIR` | `/output/logos` | directory HTTP callers may reference by path |
 | `QRGEN_BODY_LIMIT` | `10mb` | max JSON body |
+| `QRGEN_DATA_DIR` | `/output/data` | check-in events and brand kit |
+| `QRGEN_UPLOAD_IMAGE_MB` / `_PDF_MB` / `_VIDEO_MB` | `25` / `50` / `95` | per-file upload ceilings |
+| `QRGEN_HEAVY_CONCURRENCY` | `2` | image/PDF jobs run at once |
+| `QRGEN_VIDEO_MAX_SECONDS` | `600` | longest video accepted |
+| `QRGEN_VIDEO_TIMEOUT_MS` | `900000` | per-encode time limit |
 | `OUTPUT_DIR` | `/output` | where the acceptance script writes |
 | `QRGEN_URL` | `http://qrgen:3000` | **client-side**: base URL for `client.js` |
 | `QRGEN_TIMEOUT_MS` | `15000` | **client-side**: request timeout |

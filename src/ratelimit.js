@@ -38,6 +38,8 @@ function clientKey(req) {
 }
 
 function costOf(req) {
+  // Upload routes price themselves (files × work per file) once multer has run.
+  if (Number.isFinite(req.rateCost)) return Math.max(1, req.rateCost);
   const items = req.body?.items;
   if (Array.isArray(items)) return Math.max(1, items.length);
   return 1;

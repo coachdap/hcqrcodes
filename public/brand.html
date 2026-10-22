@@ -1,0 +1,432 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Brand kit · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .brandbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .addbrand { display: flex; gap: 8px; align-items: center; }
+  .addbrand input { width: 200px; }
+  .panel + .panel { margin-top: 18px; }
+  .panel h2 { font-size: 16px; margin: 0; }
+  .panel-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .logos { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
+  .logo { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); display: flex; flex-direction: column; }
+  .logo .art { aspect-ratio: 4 / 3; display: grid; place-items: center; padding: 16px; }
+  .logo .art img { max-width: 100%; max-height: 100%; display: block; }
+  .logo .art .placeholder { font-size: 12.5px; }
+  .logo .info { padding: 10px 12px; border-top: 1px solid var(--line); display: flex; flex-direction: column; gap: 8px; }
+  .logo .title { display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .logo .title b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; }
+  .logo .dl { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px; }
+  .logo .dl select { padding: 6px 8px; font-size: 12.5px; }
+  .upload-row { display: grid; grid-template-columns: minmax(0, 1fr) 200px; gap: 12px; margin-top: 14px; align-items: stretch; }
+  @media (max-width: 620px) { .upload-row { grid-template-columns: minmax(0, 1fr); } }
+  .swatches { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 12px; }
+  .swatch { border: 1px solid var(--line); border-radius: 10px; overflow: hidden; background: var(--panel); }
+  .swatch .chip-big { height: 86px; width: 100%; border: 0; border-radius: 0; padding: 0; display: block; cursor: copy; position: relative; }
+  .swatch .chip-big span { position: absolute; left: 8px; bottom: 8px; font: 600 11px/1 inherit; padding: 4px 7px; border-radius: 6px; background: rgba(0,0,0,.45); color: #fff; opacity: 0; transition: opacity .15s; }
+  .swatch .chip-big:hover span, .swatch .chip-big:focus-visible span { opacity: 1; }
+  .swatch .body { padding: 9px 10px 10px; display: flex; flex-direction: column; gap: 6px; }
+  .swatch input[type=text] { padding: 6px 8px; font-size: 13px; }
+  .swatch .hexrow { display: grid; grid-template-columns: 34px minmax(0, 1fr) auto; gap: 6px; align-items: center; }
+  .swatch input[type=color] { height: 32px; padding: 2px; }
+  .swatch .codes { display: flex; gap: 4px; flex-wrap: wrap; }
+  .swatch .codes button { font-size: 11.5px; padding: 4px 7px; }
+  .fontrow { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; gap: 8px; margin-bottom: 8px; }
+  .savebar { position: static; margin-top: 18px; padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: space-between; flex-wrap: wrap;
+    background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 -4px 18px rgba(0,0,0,.06); }
+  .savebar.dirty { position: sticky; bottom: 12px; border-color: var(--warn-line); }
+  .savebar .state { font-size: 13.5px; color: var(--muted); }
+  .savebar .state.dirty { color: var(--warn-text); font-weight: 600; }
+  button.danger { background: transparent; color: var(--err-text); border-color: var(--err-line); }
+  .empty-art { color: var(--muted); font-size: 13.5px; padding: 6px 0 2px; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="brand">
+  <header class="page">
+    <div>
+      <h1>Brand kit</h1>
+      <div class="sub">One place for each brand's logos, colours and fonts. Download a logo in any format and size, or copy a colour code. The Flyer maker and Name tags use what's saved here.</div>
+    </div>
+  </header>
+
+  <div class="brandbar">
+    <div class="seg" role="tablist" aria-label="Brand" id="brandTabs"></div>
+    <button type="button" class="ghost small" id="addBrandBtn">+ Add brand</button>
+    <form class="addbrand" id="addBrandForm" hidden>
+      <input type="text" id="newBrand" placeholder="Brand name" maxlength="80" autocomplete="off" aria-label="New brand name">
+      <button type="submit" class="small">Create</button>
+      <button type="button" class="ghost small" id="cancelBrand">Cancel</button>
+    </form>
+  </div>
+
+  <div id="loadNotes"></div>
+
+  <div id="kit" hidden>
+    <section class="panel">
+      <div class="panel-top"><h2>Logos</h2><span class="hint" style="margin:0">Downloads are rendered fresh at the size you pick.</span></div>
+      <div class="logos" id="logos"></div>
+      <div class="upload-row">
+        <div class="drop compact" id="logoDrop"></div>
+        <div class="field" style="margin:0">
+          <label for="logoName">Name for the new logo</label>
+          <input type="text" id="logoName" placeholder="e.g. Primary, White, Icon" maxlength="60">
+          <div class="hint">SVG keeps it sharp at any size. PNG with a transparent background works too.</div>
+        </div>
+      </div>
+      <div id="logoNotes"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-top">
+        <h2>Colours</h2>
+        <button type="button" class="ghost small" id="addColor">+ Add colour</button>
+      </div>
+      <div class="swatches" id="swatches"></div>
+      <div class="empty-art" id="noColors" hidden>No colours yet. Add the brand's main colours. The first dark colour is used as the main colour on flyers and badges.</div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-top">
+        <h2>Fonts</h2>
+        <button type="button" class="ghost small" id="addFont">+ Add font</button>
+      </div>
+      <div id="fonts"></div>
+      <div class="empty-art" id="noFonts" hidden>No fonts listed yet.</div>
+      <div class="hint" id="printFont"></div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-top"><h2>Details</h2></div>
+      <div class="row">
+        <div class="field"><label for="bName">Brand name</label><input type="text" id="bName" maxlength="80"></div>
+        <div class="field"><label for="bWebsite">Website</label><input type="text" id="bWebsite" maxlength="120" placeholder="example.com"></div>
+      </div>
+      <div class="field"><label for="bTagline">Tagline</label><input type="text" id="bTagline" maxlength="160"></div>
+      <div class="field"><label for="bNotes">Notes &amp; usage rules</label><textarea id="bNotes" maxlength="2000" placeholder="e.g. Always leave clear space around the logo. Never put the navy logo on a dark photo."></textarea></div>
+    </section>
+
+    <div class="savebar">
+      <span class="state" id="saveState">All changes saved</span>
+      <span class="inline">
+        <button type="button" class="danger small" id="deleteBrand">Delete brand</button>
+        <button type="button" id="save" disabled>Save changes</button>
+      </span>
+    </div>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, request, api, upload, getJson, dropzone, dropMarkup, note, toast, downloadBlob, filenameFrom, escapeHtml, busy } = qrgenUI;
+
+  let brands = [];
+  let current = null;      // working copy of the selected brand
+  let dirty = false;
+  const logoUrls = [];
+
+  // --- loading ------------------------------------------------------------------
+  async function load(selectId) {
+    try {
+      const data = await getJson('/brand');
+      brands = data.brands;
+      $('printFont').textContent = `Flyers and name tags are typeset in ${data.fontFamily}.`;
+      $('loadNotes').innerHTML = '';
+      const id = selectId || decodeURIComponent(location.hash.slice(1)) || current?.id;
+      select(brands.find((b) => b.id === id) ? id : brands[0]?.id);
+    } catch (err) {
+      $('loadNotes').innerHTML = '';
+      note($('loadNotes'), 'err', err.message + ' <button type="button" class="small ghost" id="retry">Retry</button>');
+      $('retry')?.addEventListener('click', () => load());
+    }
+  }
+
+  function renderTabs() {
+    $('brandTabs').innerHTML = brands.map((b) =>
+      `<button type="button" role="tab" data-brand="${escapeHtml(b.id)}" class="${current && b.id === current.id ? 'on' : ''}" aria-selected="${current && b.id === current.id}">${escapeHtml(b.name)}</button>`).join('');
+    $('brandTabs').hidden = !brands.length;
+  }
+
+  $('brandTabs').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-brand]');
+    if (!b || b.dataset.brand === current?.id) return;
+    if (dirty && !confirm('You have unsaved changes to this brand. Discard them?')) return;
+    select(b.dataset.brand);
+  });
+
+  function select(id) {
+    const brand = brands.find((b) => b.id === id);
+    $('kit').hidden = !brand;
+    if (!brand) { current = null; renderTabs(); return; }
+    current = structuredClone(brand);
+    history.replaceState(null, '', '#' + encodeURIComponent(id));
+    setDirty(false);
+    renderTabs();
+    renderLogos();
+    renderColors();
+    renderFonts();
+    $('bName').value = current.name;
+    $('bWebsite').value = current.website || '';
+    $('bTagline').value = current.tagline || '';
+    $('bNotes').value = current.notes || '';
+  }
+
+  // --- logos ----------------------------------------------------------------------
+  function renderLogos() {
+    logoUrls.splice(0).forEach((u) => URL.revokeObjectURL(u));
+    const logos = current.logos;
+    if (!logos.length) {
+      $('logos').innerHTML = '<div class="empty-art">No logos yet. Drop one below.</div>';
+      return;
+    }
+    $('logos').innerHTML = logos.map((l) => {
+      const vector = /\.svg$/i.test(l.file);
+      return `<div class="logo" data-logo="${escapeHtml(l.id)}">
+        <div class="art checker"><div class="placeholder">Loading…</div></div>
+        <div class="info">
+          <div class="title"><b title="${escapeHtml(l.name)}">${escapeHtml(l.name)}</b><span class="pill">${vector ? 'SVG' : 'PNG'}</span>
+            <button type="button" class="iconbtn" data-del="${escapeHtml(l.id)}" aria-label="Delete ${escapeHtml(l.name)}">✕</button></div>
+          <div class="dl">
+            <select aria-label="Download format for ${escapeHtml(l.name)}">
+              ${vector ? '<option value="svg">SVG (vector)</option>' : ''}
+              <option value="png:512">PNG · 512 px</option>
+              <option value="png:1024"${vector ? '' : ' selected'}>PNG · 1024 px</option>
+              <option value="png:2048">PNG · 2048 px</option>
+              <option value="webp:1024">WebP · 1024 px</option>
+              <option value="jpeg:1024">JPG on white · 1024 px</option>
+            </select>
+            <button type="button" class="small" data-dl="${escapeHtml(l.id)}">Download</button>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+    const brandId = current.id;
+    logos.forEach(async (l) => {
+      const art = $('logos').querySelector(`[data-logo="${CSS.escape(l.id)}"] .art`);
+      try {
+        const res = await request(`/brand/${encodeURIComponent(brandId)}/logos/${encodeURIComponent(l.id)}?format=png&size=512`);
+        const url = URL.createObjectURL(await res.blob());
+        logoUrls.push(url);
+        if (current?.id === brandId && art.isConnected) art.innerHTML = `<img src="${url}" alt="${escapeHtml(l.name)}">`;
+      } catch (err) {
+        if (art.isConnected) art.innerHTML = '<div class="placeholder">Preview unavailable</div>';
+      }
+    });
+  }
+
+  $('logos').addEventListener('click', async (e) => {
+    const dl = e.target.closest('[data-dl]');
+    const del = e.target.closest('[data-del]');
+    if (dl) {
+      const [format, size] = dl.parentElement.querySelector('select').value.split(':');
+      const q = new URLSearchParams({ format, ...(size ? { size } : {}) });
+      await busy(dl, '…', async () => {
+        try {
+          const res = await request(`/brand/${encodeURIComponent(current.id)}/logos/${encodeURIComponent(dl.dataset.dl)}?${q}`);
+          downloadBlob(await res.blob(), filenameFrom(res, `logo.${format === 'jpeg' ? 'jpg' : format}`));
+        } catch (err) { toast(err.message.replace(/<[^>]+>/g, '')); }
+      });
+    }
+    if (del) {
+      const logo = current.logos.find((l) => l.id === del.dataset.del);
+      if (!confirm(`Delete the logo "${logo?.name}"? This can't be undone.`)) return;
+      try {
+        await request(`/brand/${encodeURIComponent(current.id)}/logos/${encodeURIComponent(del.dataset.del)}`, { method: 'DELETE' });
+        const saved = brands.find((b) => b.id === current.id);
+        saved.logos = saved.logos.filter((l) => l.id !== del.dataset.del);
+        current.logos = current.logos.filter((l) => l.id !== del.dataset.del);
+        renderLogos();
+        toast('Logo deleted');
+      } catch (err) { toast(err.message.replace(/<[^>]+>/g, '')); }
+    }
+  });
+
+  $('logoDrop').innerHTML = dropMarkup('Upload a logo', 'SVG or PNG. Drop it here or click.');
+  dropzone($('logoDrop'), {
+    accept: '.svg,image/svg+xml,image/png,image/jpeg,image/webp',
+    onFiles: async ([file]) => {
+      $('logoNotes').innerHTML = '';
+      const form = new FormData();
+      form.append('files', file);
+      form.append('name', $('logoName').value.trim());
+      try {
+        const res = await upload(`/brand/${encodeURIComponent(current.id)}/logos`, form);
+        const logo = await res.json();
+        brands.find((b) => b.id === current.id).logos.push(logo);
+        current.logos.push(logo);
+        $('logoName').value = '';
+        renderLogos();
+        toast('Logo added');
+      } catch (err) { note($('logoNotes'), 'err', err.message); }
+    }
+  });
+
+  // --- colours ----------------------------------------------------------------------
+  const rgbOf = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)).join(', ');
+  const validHex = (v) => /^#[0-9a-fA-F]{6}$/.test(v);
+
+  function renderColors() {
+    $('noColors').hidden = current.colors.length > 0;
+    $('swatches').innerHTML = current.colors.map((c, i) => `
+      <div class="swatch" data-i="${i}">
+        <button type="button" class="chip-big" data-copy="hex" style="background:${escapeHtml(c.hex)}" aria-label="Copy ${escapeHtml(c.hex)}"><span>Copy HEX</span></button>
+        <div class="body">
+          <input type="text" data-field="name" value="${escapeHtml(c.name)}" placeholder="Colour name" maxlength="40" aria-label="Colour name">
+          <div class="hexrow">
+            <input type="color" data-field="picker" value="${escapeHtml(c.hex)}" aria-label="Pick colour">
+            <input type="text" data-field="hex" value="${escapeHtml(c.hex)}" maxlength="7" class="mono" aria-label="Hex code">
+            <button type="button" class="iconbtn" data-remove aria-label="Remove colour">✕</button>
+          </div>
+          <div class="codes">
+            <button type="button" class="ghost" data-copy="hex">Copy HEX</button>
+            <button type="button" class="ghost" data-copy="rgb">Copy RGB</button>
+          </div>
+        </div>
+      </div>`).join('');
+  }
+
+  $('swatches').addEventListener('click', async (e) => {
+    const sw = e.target.closest('.swatch');
+    if (!sw) return;
+    const c = current.colors[Number(sw.dataset.i)];
+    const copy = e.target.closest('[data-copy]');
+    if (copy) {
+      const text = copy.dataset.copy === 'rgb' ? `rgb(${rgbOf(c.hex)})` : c.hex;
+      try { await navigator.clipboard.writeText(text); toast(`Copied ${text}`); } catch (_) { toast(text); }
+    }
+    if (e.target.closest('[data-remove]')) {
+      current.colors.splice(Number(sw.dataset.i), 1);
+      renderColors();
+      setDirty(true);
+    }
+  });
+
+  $('swatches').addEventListener('input', (e) => {
+    const sw = e.target.closest('.swatch');
+    const c = current.colors[Number(sw.dataset.i)];
+    const f = e.target.dataset.field;
+    if (f === 'name') c.name = e.target.value;
+    if (f === 'picker' || (f === 'hex' && validHex(e.target.value.trim()))) {
+      c.hex = (f === 'picker' ? e.target.value : e.target.value.trim()).toUpperCase();
+      sw.querySelector('.chip-big').style.background = c.hex;
+      if (f === 'picker') sw.querySelector('[data-field="hex"]').value = c.hex;
+      else sw.querySelector('[data-field="picker"]').value = c.hex.toLowerCase();
+    }
+    setDirty(true);
+  });
+
+  $('addColor').addEventListener('click', () => {
+    current.colors.push({ name: '', hex: '#888888' });
+    renderColors();
+    setDirty(true);
+    $('swatches').lastElementChild?.querySelector('[data-field="name"]').focus();
+  });
+
+  // --- fonts --------------------------------------------------------------------------
+  function renderFonts() {
+    $('noFonts').hidden = current.fonts.length > 0;
+    $('fonts').innerHTML = current.fonts.map((f, i) => `
+      <div class="fontrow" data-i="${i}">
+        <input type="text" data-field="name" value="${escapeHtml(f.name)}" placeholder="Font name, e.g. Montserrat" maxlength="60" aria-label="Font name">
+        <input type="text" data-field="usage" value="${escapeHtml(f.usage || '')}" placeholder="Used for, e.g. headlines" maxlength="80" aria-label="Font usage">
+        <button type="button" class="iconbtn" data-remove aria-label="Remove font">✕</button>
+      </div>`).join('');
+  }
+  $('fonts').addEventListener('input', (e) => {
+    const row = e.target.closest('.fontrow');
+    current.fonts[Number(row.dataset.i)][e.target.dataset.field] = e.target.value;
+    setDirty(true);
+  });
+  $('fonts').addEventListener('click', (e) => {
+    if (!e.target.closest('[data-remove]')) return;
+    current.fonts.splice(Number(e.target.closest('.fontrow').dataset.i), 1);
+    renderFonts();
+    setDirty(true);
+  });
+  $('addFont').addEventListener('click', () => {
+    current.fonts.push({ name: '', usage: '' });
+    renderFonts();
+    setDirty(true);
+    $('fonts').lastElementChild?.querySelector('input').focus();
+  });
+
+  // --- details & saving -------------------------------------------------------------------
+  for (const [id, key] of [['bName', 'name'], ['bWebsite', 'website'], ['bTagline', 'tagline'], ['bNotes', 'notes']]) {
+    $(id).addEventListener('input', () => { current[key] = $(id).value; setDirty(true); });
+  }
+
+  function setDirty(v) {
+    dirty = v;
+    $('save').disabled = !v;
+    $('saveState').textContent = v ? 'Unsaved changes' : 'All changes saved';
+    $('saveState').classList.toggle('dirty', v);
+    document.querySelector('.savebar').classList.toggle('dirty', v);
+  }
+  window.addEventListener('beforeunload', (e) => { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
+
+  $('save').addEventListener('click', () => busy($('save'), 'Saving…', async () => {
+    const colors = current.colors.filter((c) => validHex(c.hex)).map((c) => ({ name: c.name.trim(), hex: c.hex }));
+    const fonts = current.fonts.filter((f) => f.name.trim()).map((f) => ({ name: f.name.trim(), usage: (f.usage || '').trim() }));
+    if (!current.name.trim()) { toast('The brand needs a name.'); return; }
+    try {
+      const res = await request(`/brand/${encodeURIComponent(current.id)}`, {
+        method: 'PATCH',
+        json: { name: current.name.trim(), website: current.website || '', tagline: current.tagline || '', notes: current.notes || '', colors, fonts }
+      });
+      const saved = await res.json();
+      brands[brands.findIndex((b) => b.id === saved.id)] = saved;
+      current = structuredClone(saved);
+      setDirty(false);
+      renderTabs();
+      renderColors();
+      renderFonts();
+      toast('Saved');
+    } catch (err) {
+      toast(err.message.replace(/<[^>]+>/g, ' '));
+    }
+  }).then(() => { if (dirty) $('save').disabled = false; else $('save').disabled = true; }));
+
+  $('deleteBrand').addEventListener('click', async () => {
+    const typed = prompt(`This deletes ${current.name} and all its logos for everyone. Type the brand name to confirm.`);
+    if (typed === null) return;
+    if (typed.trim().toLowerCase() !== current.name.trim().toLowerCase()) { toast('The name did not match. Nothing was deleted.'); return; }
+    try {
+      await request(`/brand/${encodeURIComponent(current.id)}`, { method: 'DELETE' });
+      const name = current.name;
+      setDirty(false);
+      brands = brands.filter((b) => b.id !== current.id);
+      select(brands[0]?.id);
+      toast(`${name} deleted`);
+    } catch (err) { toast(err.message.replace(/<[^>]+>/g, ' ')); }
+  });
+
+  // --- add brand ------------------------------------------------------------------------
+  $('addBrandBtn').addEventListener('click', () => { $('addBrandForm').hidden = false; $('addBrandBtn').hidden = true; $('newBrand').focus(); });
+  $('cancelBrand').addEventListener('click', () => { $('addBrandForm').hidden = true; $('addBrandBtn').hidden = false; });
+  $('addBrandForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = $('newBrand').value.trim();
+    if (!name) return;
+    if (dirty && !confirm('You have unsaved changes to this brand. Discard them?')) return;
+    try {
+      const res = await api('/brand', { name });
+      const brand = await res.json();
+      $('newBrand').value = '';
+      $('addBrandForm').hidden = true;
+      $('addBrandBtn').hidden = false;
+      setDirty(false);
+      await load(brand.id);
+      toast(`${brand.name} added`);
+    } catch (err) { toast(err.message.replace(/<[^>]+>/g, ' ')); }
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>
