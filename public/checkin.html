@@ -1,1 +1,634 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/ui/shared.css"></head><body><main class="wrap" data-tool="checkin"><header class="page"><div><h1>checkin</h1></div></header></main><script src="/ui/shared.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Check-in · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .layout2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 360px); gap: 20px; align-items: start; }
+  @media (max-width: 900px) { .layout2 { grid-template-columns: minmax(0, 1fr); } }
+
+  .events { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .events button.ev {
+    width: 100%; display: flex; align-items: center; gap: 14px; text-align: left;
+    background: var(--panel); color: var(--text); border: 1px solid var(--line); padding: 14px 16px; border-radius: 10px;
+  }
+  .events button.ev:hover { border-color: var(--accent); filter: none; }
+  .ev .info { flex: 1; min-width: 0; }
+  .ev .info b { display: block; font-size: 15.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ev .info span { display: block; font-size: 13px; color: var(--muted); font-weight: 500; margin-top: 3px; }
+  .ev .tally { font-size: 13px; color: var(--muted); font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .ev .tally b { color: var(--text); font-size: 17px; }
+
+  .evhead { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+  .evhead .titles { flex: 1; min-width: 200px; }
+  .evhead h2 { margin: 0; font-size: 20px; letter-spacing: -0.01em; overflow-wrap: anywhere; }
+  .evhead .muted { font-size: 13.5px; }
+  .back { background: transparent; color: var(--muted); padding: 0; font-size: 13.5px; font-weight: 600; border: 0; margin-bottom: 10px; }
+  .back:hover { color: var(--text); filter: none; }
+
+  .counter { display: flex; align-items: baseline; gap: 10px; margin-bottom: 8px; }
+  .counter .big { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .counter .of { color: var(--muted); font-size: 15px; font-weight: 600; }
+  .progress { height: 10px; }
+
+  .tabs { margin: 18px 0 14px; }
+
+  .camera { position: relative; border-radius: 12px; overflow: hidden; background: #0b0f16; aspect-ratio: 4 / 3; max-height: 60vh; width: 100%; }
+  .camera video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .camera .frame { position: absolute; inset: 14%; border: 3px solid rgba(255,255,255,.85); border-radius: 18px; box-shadow: 0 0 0 999px rgba(0,0,0,.25); pointer-events: none; }
+  .camera .idle { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: #c9d3e1; padding: 20px; font-size: 14px; }
+  .camera .idle button { margin-top: 12px; font-size: 16px; padding: 14px 22px; }
+
+  .banner { margin-top: 12px; padding: 16px 18px; border-radius: 12px; display: flex; gap: 14px; align-items: center; min-height: 76px; }
+  .banner .sym { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; font-size: 24px; font-weight: 800; flex: none; background: rgba(255,255,255,.25); }
+  .banner b { display: block; font-size: 20px; line-height: 1.2; overflow-wrap: anywhere; }
+  .banner span { display: block; font-size: 14px; opacity: .92; margin-top: 2px; }
+  .banner.good { background: #1f7a35; color: #fff; }
+  .banner.warn { background: #b7791f; color: #fff; }
+  .banner.bad { background: #b42318; color: #fff; }
+  .banner.idle { background: var(--soft); color: var(--muted); }
+  .banner.flash { animation: pop .25s ease; }
+  @keyframes pop { from { transform: scale(.97); } to { transform: none; } }
+
+  .manual { display: flex; gap: 8px; margin-top: 12px; }
+  .manual input { flex: 1; min-width: 0; text-transform: uppercase; }
+  .manual input::placeholder { text-transform: none; }
+
+  .people { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .people li + li { border-top: 1px solid var(--line); }
+  .people button.person {
+    width: 100%; display: flex; align-items: center; gap: 12px; text-align: left; border-radius: 0;
+    background: var(--panel); color: var(--text); border: 0; padding: 12px 14px; font-weight: 500; min-height: 56px;
+  }
+  .people button.person:hover { background: var(--soft); filter: none; }
+  .person .box { width: 26px; height: 26px; border-radius: 7px; border: 2px solid var(--line); display: grid; place-items: center; flex: none; font-size: 16px; color: transparent; }
+  .person.here .box { background: #1f7a35; border-color: #1f7a35; color: #fff; }
+  .person .who { flex: 1; min-width: 0; }
+  .person .who b { display: block; font-size: 15px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .person .who span { display: block; font-size: 12.5px; color: var(--muted); }
+  .person .when { font-size: 12.5px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .listbar { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  .listbar input { flex: 1; min-width: 180px; }
+  .recent { list-style: none; margin: 12px 0 0; padding: 0; font-size: 13px; }
+  .recent li { display: flex; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+  .recent li span:first-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .empty { padding: 26px; text-align: center; color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="checkin">
+  <header class="page" id="pageHeader">
+    <div>
+      <h1>Check-in</h1>
+      <div class="sub">Scan the QR code on each player's badge at the door, or tap their name. Several phones can scan the same event at once.</div>
+    </div>
+  </header>
+
+  <!-- Event list -->
+  <section id="listView" hidden>
+    <div class="layout2">
+      <div>
+        <div class="section">Events</div>
+        <ul class="events" id="events"></ul>
+        <div class="empty panel" id="noEvents" hidden>No events yet. Create your first one to start checking people in.</div>
+      </div>
+      <form class="panel" id="newEvent" autocomplete="off">
+        <div class="section">New event</div>
+        <div class="field"><label for="evName">Name</label><input type="text" id="evName" maxlength="120" placeholder="Fall Tryouts 2026" required></div>
+        <div class="row">
+          <div class="field"><label for="evDate">Date</label><input type="text" id="evDate" maxlength="40" placeholder="2026-09-14"></div>
+          <div class="field"><label for="evLoc">Location</label><input type="text" id="evLoc" maxlength="120" placeholder="Main Gym"></div>
+        </div>
+        <div class="actions"><button type="submit" id="create">Create event</button></div>
+        <div class="hint" style="margin-top:10px">Next you'll add the roster, then print badges with matching QR codes from <a href="/ui/tags">Name tags</a>.</div>
+      </form>
+    </div>
+    <div id="listNotes"></div>
+  </section>
+
+  <!-- One event -->
+  <section id="eventView" hidden>
+    <button type="button" class="back" id="back">← All events</button>
+    <div class="evhead">
+      <div class="titles">
+        <h2 id="evTitle"></h2>
+        <div class="muted" id="evMeta"></div>
+      </div>
+      <div class="actions">
+        <button type="button" class="ghost small" id="exportCsv">Export CSV</button>
+        <button type="button" class="ghost small" id="printBadges">Print badges</button>
+        <button type="button" class="ghost small" id="deleteEvent">Delete</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="counter"><span class="big" id="countIn">0</span><span class="of" id="countOf">of 0 checked in</span></div>
+      <div class="progress"><i id="bar"></i></div>
+    </div>
+
+    <div class="seg full tabs" role="tablist" aria-label="Check-in mode">
+      <button type="button" class="on" data-tab="scan" role="tab" aria-selected="true">Scan</button>
+      <button type="button" data-tab="list" role="tab" aria-selected="false">List</button>
+      <button type="button" data-tab="add" role="tab" aria-selected="false">Add people</button>
+    </div>
+
+    <div data-panel="scan">
+      <div class="layout2">
+        <div>
+          <div class="camera" id="camera">
+            <video id="video" playsinline muted hidden></video>
+            <div class="frame" id="frame" hidden></div>
+            <div class="idle" id="camIdle">
+              <div>
+                <div id="camMsg">Point the camera at a badge's QR code.</div>
+                <button type="button" id="camStart">Start camera</button>
+              </div>
+            </div>
+          </div>
+          <div class="actions" style="margin-top:10px" id="camControls" hidden>
+            <button type="button" class="ghost small" id="camStop">Stop camera</button>
+            <button type="button" class="ghost small" id="camSwitch">Switch camera</button>
+          </div>
+          <div class="banner idle" id="banner" aria-live="assertive"><div class="sym">·</div><div><b>Ready</b><span>Results show here as people scan in.</span></div></div>
+        </div>
+        <div class="panel">
+          <div class="section">Type a code</div>
+          <form class="manual" id="manual" autocomplete="off">
+            <input type="text" id="code" placeholder="Code from the badge, e.g. ZW3J6W" aria-label="Badge code" autocapitalize="characters" spellcheck="false">
+            <button type="submit">Check in</button>
+          </form>
+          <div class="hint">For a damaged badge, or a phone without a camera. Or use the List tab to tap a name.</div>
+          <div class="section" style="margin-top:18px">Recent</div>
+          <ul class="recent" id="recent"><li class="muted">Nothing scanned yet.</li></ul>
+        </div>
+      </div>
+    </div>
+
+    <div data-panel="list" hidden>
+      <div class="listbar">
+        <input type="text" id="search" placeholder="Search names or groups" aria-label="Search" enterkeyhint="search" autocomplete="off">
+        <div class="seg" role="group" aria-label="Filter">
+          <button type="button" class="on" data-filter="all">All</button>
+          <button type="button" data-filter="missing">Not yet</button>
+          <button type="button" data-filter="here">Here</button>
+        </div>
+      </div>
+      <ul class="people" id="people"></ul>
+      <div class="hint" style="margin-top:8px">Tap a name to check them in. Tap again to undo.</div>
+      <form class="panel" id="walkin" style="margin-top:18px" autocomplete="off">
+        <div class="section">Walk-in: someone not on the list</div>
+        <div class="row">
+          <div class="field"><label for="wName">Name</label><input type="text" id="wName" maxlength="120" required></div>
+          <div class="field"><label for="wGroup">Group</label><input type="text" id="wGroup" maxlength="80"></div>
+        </div>
+        <div class="actions"><button type="submit" id="wGo">Add and check in</button></div>
+      </form>
+    </div>
+
+    <div data-panel="add" hidden>
+      <form class="panel" id="import" autocomplete="off">
+        <div class="field">
+          <label for="paste">Paste names: one per line, or columns from a spreadsheet</label>
+          <textarea id="paste" rows="8" placeholder="Name, Group, ID&#10;Jordan Smith, U14 Boys&#10;Avery Johnson, U12, MB1234"></textarea>
+          <div class="hint">Columns: name, group/team, ID (optional). Leave ID empty and a short code is made for each person. A header row is detected automatically.</div>
+          <div class="count" id="pasteCount"></div>
+        </div>
+        <div class="field">
+          <label class="toggle"><input type="radio" name="mode" value="append" checked> Add to the current list (people with the same ID are updated)</label><br>
+          <label class="toggle" style="margin-top:6px"><input type="radio" name="mode" value="replace"> Replace the whole list (clears check-ins)</label>
+        </div>
+        <div class="actions"><button type="submit" id="importGo">Add to roster</button></div>
+        <div class="hint" style="margin-top:12px">Then <a id="printLink" href="#">print badges for this event</a>. Their QR codes match this roster.</div>
+      </form>
+    </div>
+    <div id="notes"></div>
+  </section>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, api, request, getJson, note, toast, busy, debounce, downloadBlob, filenameFrom, escapeHtml } = qrgenUI;
+  const LAST_KEY = 'qrgen.checkin.last';
+  const S = { event: null, tab: 'scan', filter: 'all', poll: null, stream: null, facing: 'environment', scanning: false, lastCode: '', lastAt: 0, inflight: false, recent: [], audio: null, wake: null };
+
+  const store = {
+    get() { try { return localStorage.getItem(LAST_KEY); } catch (_) { return null; } },
+    set(v) { try { v ? localStorage.setItem(LAST_KEY, v) : localStorage.removeItem(LAST_KEY); } catch (_) { /* ignore */ } }
+  };
+
+  const time = (iso) => iso ? new Date(iso).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : '';
+
+  // --- event list ----------------------------------------------------------------------
+
+  async function showList() {
+    stopPolling();
+    stopCamera();
+    S.event = null;
+    store.set(null);
+    history.replaceState(null, '', location.pathname);
+    $('eventView').hidden = true;
+    $('listView').hidden = false;
+    $('pageHeader').hidden = false;
+    $('listNotes').innerHTML = '';
+    try {
+      const { events } = await getJson('/checkin/events');
+      $('noEvents').hidden = events.length > 0;
+      $('events').innerHTML = events.map((e) => `
+        <li><button type="button" class="ev" data-id="${e.id}">
+          <span class="info"><b>${escapeHtml(e.name)}</b><span>${escapeHtml([e.date, e.location].filter(Boolean).join(' · ') || 'No date set')}</span></span>
+          <span class="tally"><b>${e.checkedIn}</b> / ${e.attendees} here</span>
+        </button></li>`).join('');
+    } catch (err) {
+      note($('listNotes'), 'err', err.message);
+    }
+  }
+
+  $('events').addEventListener('click', (e) => {
+    const btn = e.target.closest('button.ev');
+    if (btn) openEvent(btn.dataset.id);
+  });
+
+  $('newEvent').addEventListener('submit', (e) => {
+    e.preventDefault();
+    busy($('create'), 'Creating…', async () => {
+      try {
+        const ev = await (await api('/checkin/events', { name: $('evName').value, date: $('evDate').value, location: $('evLoc').value })).json();
+        $('newEvent').reset();
+        await openEvent(ev.id, 'add');
+        toast('Event created. Add the roster next.');
+      } catch (err) {
+        note($('listNotes'), 'err', err.message);
+      }
+    });
+  });
+
+  // --- one event -------------------------------------------------------------------------
+
+  async function openEvent(id, tab) {
+    try {
+      S.event = await getJson(`/checkin/events/${encodeURIComponent(id)}`);
+    } catch (err) {
+      store.set(null);
+      await showList();
+      note($('listNotes'), 'err', err.message);
+      return;
+    }
+    store.set(S.event.id);
+    history.replaceState(null, '', `${location.pathname}?event=${S.event.id}`);
+    $('listView').hidden = true;
+    $('pageHeader').hidden = true;
+    $('eventView').hidden = false;
+    $('notes').innerHTML = '';
+    const badges = `/ui/tags?event=${S.event.id}`;
+    $('printLink').href = badges;
+    renderEvent();
+    setTab(tab || (S.event.attendees ? 'scan' : 'add'));
+    startPolling();
+  }
+
+  function renderEvent() {
+    const ev = S.event;
+    $('evTitle').textContent = ev.name;
+    $('evMeta').textContent = [ev.date, ev.location].filter(Boolean).join(' · ');
+    setCounts(ev.checkedIn, ev.attendees);
+    renderPeople();
+  }
+
+  function setCounts(checkedIn, total) {
+    $('countIn').textContent = checkedIn;
+    $('countOf').textContent = `of ${total} checked in`;
+    $('bar').style.width = total ? `${Math.round((checkedIn / total) * 100)}%` : '0';
+  }
+
+  function setTab(tab) {
+    S.tab = tab;
+    document.querySelectorAll('[data-tab]').forEach((b) => { const on = b.dataset.tab === tab; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    document.querySelectorAll('[data-panel]').forEach((p) => { p.hidden = p.dataset.panel !== tab; });
+    if (tab !== 'scan') stopCamera();
+  }
+  document.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => setTab(b.dataset.tab)));
+
+  $('back').addEventListener('click', showList);
+  $('printBadges').addEventListener('click', () => { location.href = `/ui/tags?event=${S.event.id}`; });
+
+  $('deleteEvent').addEventListener('click', async () => {
+    if (!confirm(`Delete “${S.event.name}” and all of its check-ins? This cannot be undone.`)) return;
+    try {
+      await request(`/checkin/events/${S.event.id}`, { method: 'DELETE' });
+      toast('Event deleted');
+      showList();
+    } catch (err) { note($('notes'), 'err', err.message); }
+  });
+
+  $('exportCsv').addEventListener('click', (e) => busy(e.currentTarget, 'Exporting…', async () => {
+    try {
+      const res = await request(`/checkin/events/${S.event.id}/export.csv`);
+      downloadBlob(await res.blob(), filenameFrom(res, 'attendance.csv'));
+    } catch (err) { note($('notes'), 'err', err.message); }
+  }));
+
+  // --- polling: keeps several phones in sync ---------------------------------------------
+
+  function startPolling() {
+    stopPolling();
+    S.poll = setInterval(async () => {
+      if (!S.event || document.hidden) return;
+      try {
+        const fresh = await getJson(`/checkin/events/${S.event.id}`);
+        if (S.event && fresh.id === S.event.id) { S.event = fresh; renderEvent(); }
+      } catch (_) { /* transient; try again next tick */ }
+    }, 5000);
+  }
+  function stopPolling() { clearInterval(S.poll); S.poll = null; }
+
+  // --- list tab ----------------------------------------------------------------------------
+
+  function renderPeople() {
+    if (!S.event) return;
+    const q = $('search').value.trim().toLowerCase();
+    let rows = S.event.roster;
+    if (S.filter === 'here') rows = rows.filter((p) => p.checkedInAt);
+    if (S.filter === 'missing') rows = rows.filter((p) => !p.checkedInAt);
+    if (q) rows = rows.filter((p) => `${p.name} ${p.group} ${p.id}`.toLowerCase().includes(q));
+    rows = [...rows].sort((a, b) => a.name.localeCompare(b.name));
+    $('people').innerHTML = rows.length
+      ? rows.map((p) => `<li><button type="button" class="person${p.checkedInAt ? ' here' : ''}" data-id="${escapeHtml(p.id)}">
+          <span class="box">✓</span>
+          <span class="who"><b>${escapeHtml(p.name)}</b><span>${escapeHtml([p.group, p.id].filter(Boolean).join(' · '))}</span></span>
+          <span class="when">${p.checkedInAt ? time(p.checkedInAt) : ''}</span>
+        </button></li>`).join('')
+      : `<li class="empty">${S.event.roster.length ? 'Nobody matches.' : 'The roster is empty. Add people in the “Add people” tab.'}</li>`;
+  }
+
+  $('search').addEventListener('input', debounce(renderPeople, 120));
+  document.querySelectorAll('[data-filter]').forEach((b) => b.addEventListener('click', () => {
+    S.filter = b.dataset.filter;
+    document.querySelectorAll('[data-filter]').forEach((x) => x.classList.toggle('on', x === b));
+    renderPeople();
+  }));
+
+  $('people').addEventListener('click', async (e) => {
+    const btn = e.target.closest('button.person');
+    if (!btn) return;
+    const person = S.event.roster.find((p) => p.id === btn.dataset.id);
+    if (!person) return;
+    const present = !person.checkedInAt;
+    if (!present && !confirm(`Mark ${person.name} as not here?`)) return;
+    btn.disabled = true;
+    try {
+      const r = await (await api(`/checkin/events/${S.event.id}/attendees/${encodeURIComponent(person.id)}`, { present })).json();
+      person.checkedInAt = r.checkedInAt;
+      S.event.checkedIn = r.checkedIn;
+      setCounts(r.checkedIn, r.attendees);
+      renderPeople();
+      toast(present ? `${person.name} checked in` : `${person.name} unchecked`);
+    } catch (err) {
+      note($('notes'), 'err', err.message);
+      btn.disabled = false;
+    }
+  });
+
+  $('walkin').addEventListener('submit', (e) => {
+    e.preventDefault();
+    busy($('wGo'), 'Adding…', async () => {
+      try {
+        const r = await (await api(`/checkin/events/${S.event.id}/walkin`, { name: $('wName').value, group: $('wGroup').value })).json();
+        S.event.roster.push({ ...r.person, checkedInAt: r.checkedInAt });
+        setCounts(r.checkedIn, r.attendees);
+        renderPeople();
+        $('walkin').reset();
+        toast(`${r.person.name} added and checked in (code ${r.person.id})`);
+      } catch (err) { note($('notes'), 'err', err.message); }
+    });
+  });
+
+  // --- add people tab ------------------------------------------------------------------------
+
+  function parseRows(text) {
+    const delim = text.includes('\t') ? '\t' : ',';
+    const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const split = (line) => {
+      const out = []; let cell = ''; let q = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (q) { if (ch === '"' && line[i + 1] === '"') { cell += '"'; i++; } else if (ch === '"') q = false; else cell += ch; }
+        else if (ch === '"' && !cell.trim()) { q = true; cell = ''; }
+        else if (ch === delim) { out.push(cell.trim()); cell = ''; }
+        else cell += ch;
+      }
+      out.push(cell.trim());
+      return out;
+    };
+    const table = lines.map(split);
+    if (!table.length) return [];
+    const head = table[0].map((h) => h.toLowerCase());
+    const idx = (re) => head.findIndex((h) => re.test(h));
+    let cols = { name: idx(/^(full ?name|name|player|athlete|participant)$/), group: idx(/^(group|team|age ?group|division|class|grade|squad)$/), id: idx(/^(id|code|number|client ?id|member ?id)$/) };
+    const hasHeader = cols.name >= 0 || cols.group >= 0 || cols.id >= 0;
+    const body = hasHeader ? table.slice(1) : table;
+    if (!hasHeader || cols.name < 0) cols = { name: 0, group: hasHeader ? cols.group : 1, id: hasHeader ? cols.id : 2 };
+    return body.map((r) => ({ name: (r[cols.name] || '').slice(0, 120), group: (cols.group >= 0 ? r[cols.group] || '' : '').slice(0, 80), id: (cols.id >= 0 ? r[cols.id] || '' : '').slice(0, 40) }))
+      .filter((r) => r.name)
+      .map((r) => (r.id ? r : { name: r.name, group: r.group }));
+  }
+
+  $('paste').addEventListener('input', debounce(() => {
+    const n = parseRows($('paste').value).length;
+    $('pasteCount').innerHTML = n ? `<b>${n}</b> ${n === 1 ? 'person' : 'people'} ready to add` : '';
+  }, 150));
+
+  $('import').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const rows = parseRows($('paste').value);
+    const mode = document.querySelector('input[name=mode]:checked').value;
+    if (!rows.length) return toast('Paste some names first');
+    if (mode === 'replace' && S.event.attendees && !confirm(`Replace all ${S.event.attendees} people and clear every check-in?`)) return;
+    busy($('importGo'), 'Adding…', async () => {
+      try {
+        const r = await (await api(`/checkin/events/${S.event.id}/roster`, { rows, mode })).json();
+        $('paste').value = '';
+        $('pasteCount').textContent = '';
+        S.event = await getJson(`/checkin/events/${S.event.id}`);
+        renderEvent();
+        toast(`${r.added} added${r.updated ? `, ${r.updated} updated` : ''}. ${r.total} on the roster.`);
+        setTab('list');
+      } catch (err) { note($('notes'), 'err', err.message); }
+    });
+  });
+
+  // --- scanning -------------------------------------------------------------------------------
+
+  function loadJsQR() {
+    if (window.jsQR) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = '/ui/vendor/jsQR.js';
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('The QR reader could not be loaded.'));
+      document.head.appendChild(s);
+    });
+  }
+
+  function beep(kind) {
+    try {
+      S.audio ??= new (window.AudioContext || window.webkitAudioContext)();
+      const ctx = S.audio;
+      const tones = kind === 'good' ? [[880, 0, 0.12]] : kind === 'warn' ? [[660, 0, 0.1], [660, 0.16, 0.1]] : [[220, 0, 0.35]];
+      for (const [freq, at, dur] of tones) {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.frequency.value = freq;
+        osc.type = kind === 'bad' ? 'square' : 'sine';
+        gain.gain.setValueAtTime(0.18, ctx.currentTime + at);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + at + dur);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(ctx.currentTime + at);
+        osc.stop(ctx.currentTime + at + dur + 0.02);
+      }
+    } catch (_) { /* no audio */ }
+    try { navigator.vibrate?.(kind === 'good' ? 80 : kind === 'warn' ? [60, 60, 60] : [200, 80, 200]); } catch (_) { /* ignore */ }
+  }
+
+  function showBanner(kind, title, sub) {
+    const el = $('banner');
+    el.className = `banner ${kind}`;
+    const sym = { good: '✓', warn: '!', bad: '✕', idle: '·' }[kind];
+    el.innerHTML = `<div class="sym">${sym}</div><div><b>${escapeHtml(title)}</b><span>${escapeHtml(sub || '')}</span></div>`;
+    void el.offsetWidth;
+    el.classList.add('flash');
+  }
+
+  function remember(text) {
+    S.recent.unshift({ at: new Date(), text });
+    S.recent = S.recent.slice(0, 6);
+    $('recent').innerHTML = S.recent.map((r) => `<li><span>${time(r.at.toISOString())}</span><span>${escapeHtml(r.text)}</span></li>`).join('');
+  }
+
+  async function submitCode(code) {
+    if (!S.event || S.inflight) return;
+    S.inflight = true;
+    try {
+      const r = await (await api(`/checkin/events/${S.event.id}/scan`, { code })).json();
+      setCounts(r.checkedIn, r.attendees);
+      const p = r.person;
+      if (r.status === 'checked-in') {
+        showBanner('good', p.name, [p.group, 'Checked in'].filter(Boolean).join(' · '));
+        beep('good');
+        remember(`✓ ${p.name}`);
+        const local = S.event.roster.find((x) => x.id === p.id);
+        if (local) local.checkedInAt = r.at;
+      } else if (r.status === 'already') {
+        showBanner('warn', p.name, `Already checked in at ${time(r.at)}${p.group ? ' · ' + p.group : ''}`);
+        beep('warn');
+        remember(`! ${p.name} (already in)`);
+      } else {
+        showBanner('bad', 'Not on this roster', `Code “${r.id || r.code}”. Add them as a walk-in on the List tab.`);
+        beep('bad');
+        remember(`✕ unknown code ${r.id || r.code}`);
+      }
+      renderPeople();
+    } catch (err) {
+      showBanner('bad', 'Could not check in', err.message.replace(/<[^>]+>/g, ' '));
+      beep('bad');
+    } finally {
+      S.inflight = false;
+    }
+  }
+
+  $('manual').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const code = $('code').value.trim();
+    if (!code) return;
+    S.audio ??= (() => { try { return new (window.AudioContext || window.webkitAudioContext)(); } catch (_) { return null; } })();
+    submitCode(code).then(() => { $('code').value = ''; $('code').focus(); });
+  });
+
+  function camMessage(text) {
+    $('camMsg').textContent = text;
+    $('camIdle').hidden = false;
+    $('video').hidden = true;
+    $('frame').hidden = true;
+    $('camControls').hidden = true;
+  }
+
+  async function startCamera() {
+    // Unlock audio on this user gesture so later beeps can play.
+    try { S.audio ??= new (window.AudioContext || window.webkitAudioContext)(); S.audio.resume?.(); } catch (_) { /* ignore */ }
+    if (!window.isSecureContext) return camMessage('The camera only works over a secure connection. Open this page at https://qr.hoopscollege.com/ui/checkin, or type codes on the right.');
+    if (!navigator.mediaDevices?.getUserMedia) return camMessage('This browser cannot use the camera. Type codes on the right, or use the List tab.');
+    try {
+      await loadJsQR();
+      stopCamera();
+      S.stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: S.facing }, width: { ideal: 1280 }, height: { ideal: 720 } }, audio: false });
+      const video = $('video');
+      video.srcObject = S.stream;
+      await video.play();
+      video.hidden = false;
+      $('frame').hidden = false;
+      $('camIdle').hidden = true;
+      $('camControls').hidden = false;
+      S.scanning = true;
+      try { S.wake = await navigator.wakeLock?.request('screen'); } catch (_) { S.wake = null; }
+      scanLoop();
+    } catch (err) {
+      stopCamera();
+      if (err.name === 'NotAllowedError' || err.name === 'SecurityError') camMessage('Camera access was blocked. Allow the camera for this site in your browser settings and try again, or type codes on the right.');
+      else if (err.name === 'NotFoundError' || err.name === 'OverconstrainedError') camMessage('No camera was found on this device. Type codes on the right, or use the List tab.');
+      else camMessage(err.message || 'The camera could not be started.');
+    }
+  }
+
+  function stopCamera() {
+    S.scanning = false;
+    S.stream?.getTracks().forEach((t) => t.stop());
+    S.stream = null;
+    try { S.wake?.release(); } catch (_) { /* ignore */ }
+    S.wake = null;
+    if ($('video')) { $('video').srcObject = null; }
+    if (!$('camIdle').hidden) return;
+    camMessage('Point the camera at a badge\'s QR code.');
+  }
+
+  const canvas = document.createElement('canvas');
+  const ctx2d = canvas.getContext('2d', { willReadFrequently: true });
+  let lastFrame = 0;
+
+  function scanLoop(now = 0) {
+    if (!S.scanning) return;
+    requestAnimationFrame(scanLoop);
+    if (now - lastFrame < 120 || S.inflight) return; // ~8 decodes a second is plenty
+    lastFrame = now;
+    const video = $('video');
+    if (video.readyState < 2 || !video.videoWidth) return;
+    const scale = Math.min(1, 720 / video.videoWidth);
+    canvas.width = Math.round(video.videoWidth * scale);
+    canvas.height = Math.round(video.videoHeight * scale);
+    ctx2d.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const img = ctx2d.getImageData(0, 0, canvas.width, canvas.height);
+    const hit = window.jsQR(img.data, img.width, img.height, { inversionAttempts: 'dontInvert' });
+    if (!hit?.data) return;
+    const t = Date.now();
+    // The same badge stays in view for a while; only act on it once every few seconds.
+    if (hit.data === S.lastCode && t - S.lastAt < 3000) return;
+    S.lastCode = hit.data;
+    S.lastAt = t;
+    submitCode(hit.data);
+  }
+
+  $('camStart').addEventListener('click', startCamera);
+  $('camStop').addEventListener('click', stopCamera);
+  $('camSwitch').addEventListener('click', () => { S.facing = S.facing === 'environment' ? 'user' : 'environment'; startCamera(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && S.scanning) stopCamera(); });
+
+  // --- start -------------------------------------------------------------------------------------
+
+  const wanted = new URLSearchParams(location.search).get('event') || store.get();
+  if (wanted) openEvent(wanted);
+  else showList();
+})();
+</script>
+</body>
+</html>

@@ -3,17 +3,13 @@
  * loading (Inter when installed, Helvetica otherwise), wrapping and
  * shrink-to-fit text, colour helpers and vector QR codes.
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import fontkit from '@pdf-lib/fontkit';
 import QRCode from 'qrcode';
 
-const FONT_DIRS = [
-  process.env.QRGEN_FONT_DIR,
-  '/usr/share/fonts/opentype/inter',
-  '/usr/share/fonts/truetype/inter',
-  '/usr/local/share/fonts'
-].filter(Boolean);
+const FONT_ROOTS = [process.env.QRGEN_FONT_DIR, '/usr/share/fonts', '/usr/local/share/fonts'].filter(Boolean);
 
 const WEIGHTS = {
   regular: ['Inter-Regular', 'Inter-Medium'],
@@ -21,19 +17,34 @@ const WEIGHTS = {
   black: ['Inter-ExtraBold', 'Inter-Black', 'Inter-Bold']
 };
 
-const fontBytes = {};
-for (const [weight, names] of Object.entries(WEIGHTS)) {
-  outer: for (const dir of FONT_DIRS) {
-    for (const name of names) {
-      for (const ext of ['.otf', '.ttf']) {
-        const file = `${dir}/${name}${ext}`;
-        if (existsSync(file)) {
-          fontBytes[weight] = readFileSync(file);
-          break outer;
-        }
+// Search the font trees rather than fixed paths: Debian releases have moved
+// Inter between opentype/ and truetype/ subdirectories.
+function findFonts() {
+  const found = new Map();
+  const walk = (dir, depth) => {
+    let entries;
+    try {
+      entries = readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      const full = path.join(dir, e.name);
+      if (e.isDirectory() && depth < 4) walk(full, depth + 1);
+      else if (/^Inter-[A-Za-z]+\.(otf|ttf)$/.test(e.name) && !found.has(e.name.replace(/\.\w+$/, ''))) {
+        found.set(e.name.replace(/\.\w+$/, ''), full);
       }
     }
-  }
+  };
+  for (const root of FONT_ROOTS) walk(root, 0);
+  return found;
+}
+
+const available = findFonts();
+const fontBytes = {};
+for (const [weight, names] of Object.entries(WEIGHTS)) {
+  const hit = names.find((n) => available.has(n));
+  if (hit) fontBytes[weight] = readFileSync(available.get(hit));
 }
 export const FONT_FAMILY = fontBytes.regular && fontBytes.bold && fontBytes.black ? 'Inter' : 'Helvetica';
 

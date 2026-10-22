@@ -1,1 +1,346 @@
-<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/ui/shared.css"></head><body><main class="wrap" data-tool="tags"><header class="page"><div><h1>tags</h1></div></header></main><script src="/ui/shared.js"></script></body></html>
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Name tags &amp; rosters · Utilities</title>
+<link rel="stylesheet" href="/ui/shared.css">
+<style>
+  .grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  @media (max-width: 1100px) { .grid { grid-template-columns: minmax(0, 1fr); } }
+  textarea#roster { min-height: 170px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; }
+  .tablewrap { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; }
+  .tablewrap table.list th { position: sticky; top: 0; background: var(--panel); }
+  .tablewrap td { overflow-wrap: anywhere; }
+  .count { font-size: 13px; color: var(--muted); margin-top: 8px; }
+  .count b { color: var(--text); }
+  iframe.pdf { width: 100%; height: 70vh; min-height: 420px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+  .callout { margin-top: 12px; padding: 12px; border-radius: 8px; background: var(--soft); font-size: 13.5px; }
+  .callout p { margin: 0 0 10px; }
+  .drop.compact { min-height: 64px; padding: 12px 16px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<main class="wrap" data-tool="tags">
+  <header class="page">
+    <div>
+      <h1>Name tags &amp; rosters</h1>
+      <div class="sub">Print badges, bag and jersey labels, or a sign-in sheet from your roster. Each person gets a QR code that the <a href="/ui/checkin">Check-in</a> scanner reads at the door.</div>
+    </div>
+  </header>
+
+  <div class="grid">
+    <form class="panel" id="form" autocomplete="off">
+      <div class="section">1 · Who</div>
+      <div class="field">
+        <div class="seg full" role="tablist" aria-label="Roster source">
+          <button type="button" class="on" data-source="paste" role="tab" aria-selected="true">Type or paste names</button>
+          <button type="button" data-source="event" role="tab" aria-selected="false">From a check-in event</button>
+        </div>
+      </div>
+
+      <div data-pane="paste">
+        <div class="field">
+          <label for="roster">Names: one per line, or paste from a spreadsheet</label>
+          <textarea id="roster" placeholder="Name, Group, ID&#10;Jordan Smith, U14 Boys&#10;Avery Johnson, U12"></textarea>
+          <div class="hint">Columns: name, then group/team, then ID (optional). A header row such as <code>Name,Team,ID</code> is detected automatically.</div>
+          <div class="drop compact" id="csvDrop"></div>
+          <div class="count" id="count"></div>
+          <div class="tablewrap" id="tableWrap" hidden><table class="list"><thead><tr><th>Name</th><th>Group</th><th>ID</th></tr></thead><tbody id="tbody"></tbody></table></div>
+        </div>
+      </div>
+
+      <div data-pane="event" hidden>
+        <div class="field">
+          <label for="event">Event</label>
+          <select id="event"><option value="">Loading events…</option></select>
+          <div class="hint">Badges use the event's roster and IDs, so every QR code scans straight into that event. <a href="/ui/checkin">Manage events</a></div>
+        </div>
+      </div>
+
+      <hr>
+      <div class="section">2 · What to print</div>
+      <div class="field">
+        <label for="layout">Layout</label>
+        <select id="layout"></select>
+        <div class="hint" id="layoutHint"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="title">Title</label><input type="text" id="title" maxlength="120" placeholder="Fall Tryouts 2026"></div>
+        <div class="field"><label for="subtitle">Subtitle</label><input type="text" id="subtitle" maxlength="120" placeholder="Sat, Sept 14 · Main Gym"></div>
+      </div>
+      <div class="row">
+        <div class="field"><label for="brand">Brand</label><select id="brand"><option value="hoops-college">Hoops College</option></select></div>
+        <div class="field"><label for="primary">Colour</label><input type="color" id="primary" value="#0B1F3A"></div>
+      </div>
+
+      <div class="field">
+        <label for="qrMode">QR code on each tag</label>
+        <select id="qrMode">
+          <option value="checkin">Check-in code (scan at the door)</option>
+          <option value="url">A link per person</option>
+          <option value="none">No QR code</option>
+        </select>
+      </div>
+      <div class="field" id="urlField" hidden>
+        <label for="urlTemplate">Link template</label>
+        <input type="text" id="urlTemplate" maxlength="500" placeholder="https://hoopscollege.com/players/{id}">
+        <div class="hint"><code>{id}</code>, <code>{name}</code> and <code>{group}</code> are filled in for each person.</div>
+      </div>
+      <div class="callout" id="needsEvent" hidden>
+        <p><b>Check-in QR codes need an event.</b> The scanner can only recognise people who are on a check-in event's roster. Create one from this list and the badges will scan straight in.</p>
+        <button type="button" class="small" id="makeEvent">Create a check-in event from this list</button>
+      </div>
+
+      <div class="row" style="margin-top:14px">
+        <div class="field">
+          <label for="sort">Order</label>
+          <select id="sort"><option value="none">As listed</option><option value="name">By name</option><option value="group">By group, then name</option></select>
+        </div>
+        <div class="field" style="align-self:end">
+          <label class="toggle"><input type="checkbox" id="outline"> Cut lines</label>
+          <div class="hint">For plain paper or card stock instead of label sheets.</div>
+        </div>
+      </div>
+      <label class="toggle" style="margin-bottom:14px"><input type="checkbox" id="showLogo" checked> Logo on badges and sheets</label>
+
+      <div class="actions">
+        <button type="submit" id="go">Make PDF</button>
+      </div>
+      <div id="notes"></div>
+    </form>
+
+    <div class="panel">
+      <div class="placeholder" id="placeholder" style="padding:80px 20px">Your printable PDF will appear here.</div>
+      <div id="result" hidden>
+        <iframe class="pdf" id="pdf" title="Name tag preview"></iframe>
+        <div class="note" id="pdfNote" hidden>Your PDF is ready. Download it to view and print.</div>
+        <div class="actions" style="margin-top:12px">
+          <button type="button" id="download">Download PDF</button>
+        </div>
+        <div class="hint" style="margin-top:8px">Print at <b>100% / Actual size</b> (not "Fit to page") so the tags line up with the label sheet. Try one sheet on plain paper first.</div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="/ui/shared.js"></script>
+<script>
+(function () {
+  const { $, api, getJson, note, toast, busy, dropzone, dropMarkup, downloadBlob, filenameFrom, escapeHtml, debounce } = qrgenUI;
+  const S = { source: 'paste', rows: [], brands: [], result: null, events: [] };
+  const LAYOUT_HINTS = {
+    'badge-4x3': 'Big, easy-to-read badges for clip-on holders. 6 per sheet.',
+    'badge-5395': 'Classic stick-on name badges. 8 per sheet.',
+    'square-2x2': 'Small square stickers for bags, water bottles and jerseys. 12 per sheet.',
+    'label-5160': 'Address-label size, good for folders and equipment. 30 per sheet.',
+    roster: 'A table with a QR, a check box and a signature line per person, for a clipboard at the door.'
+  };
+
+  // --- CSV / paste parsing ----------------------------------------------------------
+
+  function parseDelimited(text) {
+    const delim = text.includes('\t') ? '\t' : ',';
+    const rows = [];
+    let row = [], cell = '', quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (quoted) {
+        if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+        else if (ch === '"') quoted = false;
+        else cell += ch;
+      } else if (ch === '"' && cell.trim() === '') { quoted = true; cell = ''; }
+      else if (ch === delim) { row.push(cell); cell = ''; }
+      else if (ch === '\n' || ch === '\r') {
+        if (ch === '\r' && text[i + 1] === '\n') i++;
+        row.push(cell); rows.push(row); row = []; cell = '';
+      } else cell += ch;
+    }
+    row.push(cell); rows.push(row);
+    return rows.map((r) => r.map((c) => c.trim())).filter((r) => r.some(Boolean));
+  }
+
+  const HEAD = {
+    name: /^(full ?name|name|player|athlete|participant|camper|student)$/i,
+    first: /^(first|first ?name|given ?name)$/i,
+    last: /^(last|last ?name|surname|family ?name)$/i,
+    group: /^(group|team|age ?group|division|class|grade|squad|level|session)$/i,
+    id: /^(id|code|number|no\.?|#|client ?id|member ?id|player ?id)$/i
+  };
+
+  function toRows(text) {
+    const table = parseDelimited(text);
+    if (!table.length) return [];
+    const head = table[0];
+    const find = (re) => head.findIndex((h) => re.test(h));
+    const cols = { name: find(HEAD.name), first: find(HEAD.first), last: find(HEAD.last), group: find(HEAD.group), id: find(HEAD.id) };
+    const hasHeader = Object.values(cols).some((i) => i >= 0);
+    const body = hasHeader ? table.slice(1) : table;
+    if (!hasHeader) Object.assign(cols, { name: 0, group: 1, id: 2 });
+    return body.map((r) => {
+      let name = cols.name >= 0 ? r[cols.name] : '';
+      if (!name && (cols.first >= 0 || cols.last >= 0)) name = [r[cols.first], r[cols.last]].filter(Boolean).join(' ');
+      return { name: (name || '').slice(0, 120), group: ((cols.group >= 0 && r[cols.group]) || '').slice(0, 80), id: ((cols.id >= 0 && r[cols.id]) || '').slice(0, 40) };
+    }).filter((r) => r.name);
+  }
+
+  function updateRows() {
+    S.rows = toRows($('roster').value);
+    const n = S.rows.length;
+    $('count').innerHTML = n ? `<b>${n}</b> ${n === 1 ? 'person' : 'people'}${S.rows.some((r) => r.group) ? ` · ${new Set(S.rows.map((r) => r.group).filter(Boolean)).size} groups` : ''}` : '';
+    $('tableWrap').hidden = !n;
+    const shown = S.rows.slice(0, 50);
+    $('tbody').innerHTML = shown.map((r) => `<tr><td>${escapeHtml(r.name)}</td><td>${escapeHtml(r.group)}</td><td class="mono">${escapeHtml(r.id)}</td></tr>`).join('') +
+      (n > shown.length ? `<tr><td colspan="3" class="muted">…and ${n - shown.length} more</td></tr>` : '');
+    updateCallout();
+  }
+  $('roster').addEventListener('input', debounce(updateRows, 200));
+
+  $('csvDrop').innerHTML = dropMarkup('Or drop a CSV file', 'Exported from a spreadsheet, MindBody or a registration form');
+  dropzone($('csvDrop'), {
+    accept: '.csv,.tsv,.txt,text/csv,text/plain',
+    onFiles: async ([file]) => {
+      $('roster').value = (await file.text()).replace(/^﻿/, '');
+      updateRows();
+      toast(`Loaded ${S.rows.length} names from ${file.name}`);
+    }
+  });
+
+  // --- source switching ---------------------------------------------------------------
+
+  function setSource(src) {
+    S.source = src;
+    document.querySelectorAll('[data-source]').forEach((b) => { const on = b.dataset.source === src; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); });
+    document.querySelectorAll('[data-pane]').forEach((p) => { p.hidden = p.dataset.pane !== src; });
+    if (src === 'event') fillFromEvent();
+    updateCallout();
+  }
+  document.querySelectorAll('[data-source]').forEach((b) => b.addEventListener('click', () => setSource(b.dataset.source)));
+
+  async function loadEvents(selectId) {
+    try {
+      S.events = (await getJson('/checkin/events')).events;
+      $('event').innerHTML = S.events.length
+        ? S.events.map((e) => `<option value="${e.id}">${escapeHtml(e.name)}${e.date ? ' · ' + escapeHtml(e.date) : ''} (${e.attendees} people)</option>`).join('')
+        : '<option value="">No events yet. Create one in Check-in.</option>';
+      if (selectId && S.events.some((e) => e.id === selectId)) $('event').value = selectId;
+    } catch (err) {
+      $('event').innerHTML = '<option value="">Could not load events</option>';
+      note($('notes'), 'err', err.message);
+    }
+  }
+
+  function fillFromEvent() {
+    const ev = S.events.find((e) => e.id === $('event').value);
+    if (!ev) return;
+    $('title').value = ev.name;
+    $('subtitle').value = [ev.date, ev.location].filter(Boolean).join(' · ');
+  }
+  $('event').addEventListener('change', fillFromEvent);
+
+  // --- QR mode ------------------------------------------------------------------------
+
+  function updateCallout() {
+    $('urlField').hidden = $('qrMode').value !== 'url';
+    $('needsEvent').hidden = !(S.source === 'paste' && $('qrMode').value === 'checkin' && S.rows.length);
+  }
+  $('qrMode').addEventListener('change', updateCallout);
+
+  $('makeEvent').addEventListener('click', (e) => busy(e.currentTarget, 'Creating…', async () => {
+    try {
+      updateRows();
+      if (!S.rows.length) throw new Error('Add some names first.');
+      const name = $('title').value.trim() || 'Event ' + new Date().toLocaleDateString();
+      const ev = await (await api('/checkin/events', { name, date: $('subtitle').value.trim().slice(0, 40) })).json();
+      const rows = S.rows.map((r) => ({ name: r.name, group: r.group, ...(r.id ? { id: r.id } : {}) }));
+      await api(`/checkin/events/${ev.id}/roster`, { rows, mode: 'replace' });
+      await loadEvents(ev.id);
+      setSource('event');
+      toast(`Created “${name}” with ${rows.length} people`);
+    } catch (err) {
+      note($('notes'), 'err', err.message);
+    }
+  }));
+
+  // --- layouts, brands ----------------------------------------------------------------
+
+  function brandPrimary(id) {
+    const b = S.brands.find((x) => x.id === id);
+    const hex = (b?.colors || []).map((c) => c.hex.toUpperCase()).find((h) => !/^#F[0-9A-F]F[0-9A-F]F[0-9A-F]$/.test(h));
+    return hex || '#0B1F3A';
+  }
+  $('brand').addEventListener('change', () => { $('primary').value = brandPrimary($('brand').value); });
+  $('layout').addEventListener('change', () => { $('layoutHint').textContent = LAYOUT_HINTS[$('layout').value] || ''; });
+
+  async function loadOptions() {
+    try {
+      const [meta, brand] = await Promise.all([getJson('/tools/meta'), getJson('/brand')]);
+      $('layout').innerHTML = Object.entries(meta.tagLayouts).map(([k, v]) => `<option value="${k}">${escapeHtml(v)}</option>`).join('');
+      $('layoutHint').textContent = LAYOUT_HINTS[$('layout').value] || '';
+      S.brands = brand.brands;
+      $('brand').innerHTML = S.brands.map((b) => `<option value="${escapeHtml(b.id)}">${escapeHtml(b.name)}</option>`).join('');
+      $('primary').value = brandPrimary($('brand').value);
+    } catch (err) {
+      note($('notes'), 'err', err.message);
+    }
+  }
+
+  // --- generate -----------------------------------------------------------------------
+
+  $('form').addEventListener('submit', (e) => {
+    e.preventDefault();
+    busy($('go'), 'Making PDF…', async () => {
+      $('notes').innerHTML = '';
+      try {
+        const body = {
+          layout: $('layout').value,
+          title: $('title').value,
+          subtitle: $('subtitle').value,
+          brandId: $('brand').value,
+          primary: $('primary').value.toUpperCase(),
+          showLogo: $('showLogo').checked,
+          qrMode: $('qrMode').value,
+          urlTemplate: $('urlTemplate').value,
+          outline: $('outline').checked,
+          sort: $('sort').value
+        };
+        if (S.source === 'event') {
+          if (!$('event').value) throw new Error('Pick an event, or switch to typing names.');
+          body.eventId = $('event').value;
+        } else {
+          updateRows(); // don't lose a paste made just before clicking
+          if (!S.rows.length) throw new Error('Add at least one name.');
+          body.rows = S.rows.map((r) => ({ name: r.name, group: r.group, ...(r.id ? { id: r.id } : {}) }));
+          if (body.qrMode === 'checkin' && !S.rows.some((r) => r.id)) {
+            note($('notes'), 'warn', 'These names have no IDs, so the tags were made without check-in QR codes. Use “Create a check-in event from this list” to add them.');
+          }
+        }
+        if (body.qrMode === 'url' && !body.urlTemplate.trim()) throw new Error('Enter the link template, or pick a different QR option.');
+        const res = await api('/print/tags', body);
+        const blob = await res.blob();
+        if (S.result) URL.revokeObjectURL(S.result.url);
+        S.result = { blob, url: URL.createObjectURL(blob), filename: filenameFrom(res, 'name-tags.pdf') };
+        // Phones generally can't show a PDF inline; offer the download instead of a blank box.
+        const inline = navigator.pdfViewerEnabled !== false;
+        $('pdf').hidden = !inline;
+        if (inline) $('pdf').src = S.result.url;
+        $('pdfNote').hidden = inline;
+        $('result').hidden = false;
+        $('placeholder').hidden = true;
+      } catch (err) {
+        note($('notes'), 'err', err.message);
+      }
+    });
+  });
+  $('download').addEventListener('click', () => S.result && downloadBlob(S.result.blob, S.result.filename));
+
+  // --- start ---------------------------------------------------------------------------
+
+  const fromEvent = new URLSearchParams(location.search).get('event');
+  loadOptions();
+  loadEvents(fromEvent).then(() => { if (fromEvent && $('event').value === fromEvent) setSource('event'); });
+  updateRows();
+})();
+</script>
+</body>
+</html>
